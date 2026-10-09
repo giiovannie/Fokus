@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+vi.mock('../src/migrations/runner.js', () => ({ verifyMigrations: vi.fn() }))
 
 vi.mock('../src/models/index.js', () => ({
   sequelize: {
@@ -9,9 +11,11 @@ vi.mock('../src/models/index.js', () => ({
 
 const { sequelize } = await import('../src/models/index.js')
 const { initializeDatabase } = await import('../src/config/initializeDatabase.js')
+const { verifyMigrations } = await import('../src/migrations/runner.js')
 
 describe('initializeDatabase', () => {
   beforeEach(() => vi.clearAllMocks())
+  afterEach(() => vi.unstubAllEnvs())
 
   it('valida la conexión antes de sincronizar los modelos sin opciones destructivas', async () => {
     await initializeDatabase()
@@ -26,6 +30,21 @@ describe('initializeDatabase', () => {
     sequelize.authenticate.mockRejectedValueOnce(new Error('connection failed'))
 
     await expect(initializeDatabase()).rejects.toThrow('connection failed')
+    expect(sequelize.sync).not.toHaveBeenCalled()
+  })
+
+  it('en producción verifica migraciones sin ejecutar sync', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    await initializeDatabase()
+    expect(sequelize.authenticate).toHaveBeenCalledOnce()
+    expect(verifyMigrations).toHaveBeenCalledWith(sequelize)
+    expect(sequelize.sync).not.toHaveBeenCalled()
+  })
+
+  it('rechaza el arranque en producción si el esquema no está preparado', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    verifyMigrations.mockRejectedValueOnce(new Error('migraciones pendientes'))
+    await expect(initializeDatabase()).rejects.toThrow('migraciones pendientes')
     expect(sequelize.sync).not.toHaveBeenCalled()
   })
 })

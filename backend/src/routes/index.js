@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { getHealth } from '../controllers/health.controller.js'
 import { authRouter } from './auth.routes.js'
 import { dashboardRouter } from './dashboard.routes.js'
 import { examRouter } from './exam.routes.js'
@@ -12,6 +13,7 @@ import { notificationRouter } from './notification.routes.js'
 import { userRouter } from './user.routes.js'
 
 const router = Router()
+router.get('/health', getHealth)
 
 router.use('/auth', authRouter)
 router.use('/dashboard', dashboardRouter)

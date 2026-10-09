@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "nodemon app.js",
     "start": "node app.js",
+    "db:migrate": "node scripts/migrate.js up",
+    "db:migrate:status": "node scripts/migrate.js status",
+    "db:migrate:verify": "node scripts/migrate.js verify",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest"
   },
@@ -16,6 +19,7 @@
     "cors": "^2.8.5",
     "dotenv": "^17.2.2",
     "express": "^5.1.0",
+    "express-rate-limit": "^8.7.1",
     "express-validator": "^7.2.1",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.4.0",
