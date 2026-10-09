@@ -3,7 +3,7 @@ import { useAuth } from '../hooks/useAuth.js'
 import { ApiError } from '../services/api.js'
 import { createExam, deleteExam, getExams, updateExam, updateExamGrade } from '../services/exams.service.js'
 import { getNotifications } from '../services/notifications.service.js'
-import { createProfile, getProfile, updateProfile as updateProfileRequest } from '../services/profiles.service.js'
+import { createProfile, getProfile, updateProfile as updateProfileRequest, uploadProfileAvatar } from '../services/profiles.service.js'
 import { createStudyActivity, getStudyActivities, updateStudyActivityStatus } from '../services/study-activities.service.js'
 import { createSubject, deleteSubject, getSubjects, updateSubject } from '../services/subjects.service.js'
 import { createTaskNote, deleteTaskNote, getTaskNotes, updateTaskNote } from '../services/task-notes.service.js'
@@ -196,6 +196,22 @@ export const AppProvider = ({ children }) => {
     return runMutation(request, (current, updated) => ({ ...current, profile: updated }))
   }, [data.profile.id, runMutation, user])
 
+  const uploadProfileImage = useCallback(async (file, profile) => {
+    try {
+      const saved = data.profile.id
+        ? await updateProfileRequest(data.profile.id, profile)
+        : await createProfile({ ...profile, user_id: user.id })
+      // Keep a successfully created profile even if the following upload fails.
+      setData((current) => ({ ...current, profile: saved }))
+      const uploaded = await uploadProfileAvatar(saved.id, file)
+      setData((current) => ({ ...current, profile: uploaded }))
+      return uploaded
+    } catch (requestError) {
+      notify(requestError.message, 'danger')
+      return false
+    }
+  }, [data.profile.id, notify, user])
+
   const value = useMemo(() => ({
     data,
     toast,
@@ -208,7 +224,8 @@ export const AppProvider = ({ children }) => {
     updateItem,
     removeItem,
     updateProfile,
-  }), [data, toast, isLoading, error, loadData, notify, addItem, updateItem, removeItem, updateProfile])
+    uploadProfileImage,
+  }), [data, toast, isLoading, error, loadData, notify, addItem, updateItem, removeItem, updateProfile, uploadProfileImage])
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
 }

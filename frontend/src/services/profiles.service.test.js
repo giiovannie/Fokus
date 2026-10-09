@@ -1,8 +1,25 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createProfile, updateProfile } from './profiles.service.js'
+import { createProfile, updateProfile, uploadProfileAvatar } from './profiles.service.js'
+import { clearSession, saveSession } from '../utils/authSession.js'
 
 describe('services de perfil', () => {
-  afterEach(() => vi.unstubAllGlobals())
+  afterEach(() => { clearSession(); vi.unstubAllGlobals() })
+
+  it('sube el campo avatar con POST, Bearer y sin Content-Type manual', async () => {
+    saveSession({ user: { id: 1 }, token: 'test-only' })
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ id: 2, avatar_url: 'https://example.com/new.webp' }) })
+    vi.stubGlobal('fetch', fetchMock)
+    const file = new File(['image'], 'avatar.png', { type: 'image/png' })
+    await uploadProfileAvatar(2, file)
+    const [url, options] = fetchMock.mock.calls[0]
+    expect(url).toEqual(expect.stringContaining('/profiles/2/avatar'))
+    expect(options.method).toBe('POST')
+    expect(options.body).toBeInstanceOf(FormData)
+    expect(options.body.get('avatar')).toBe(file)
+    expect([...options.body.keys()]).toEqual(['avatar'])
+    expect(options.headers.Authorization).toBe('Bearer test-only')
+    expect(options.headers).not.toHaveProperty('Content-Type')
+  })
 
   it.each([
     ['', null],

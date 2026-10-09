@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useAppData } from '../../hooks/useAppData.js'
+import { Avatar } from './Avatar.jsx'
 
 const Topbar = ({ onMenu }) => {
   const { data } = useAppData()
@@ -18,7 +19,7 @@ const Topbar = ({ onMenu }) => {
           {unread > 0 && <span className="notification-count">{unread}</span>}
         </Link>
         <Link className="avatar-link" to="/profile" aria-label="Ver perfil">
-          {data.profile.name.charAt(0)}{data.profile.last_name.charAt(0)}
+          <Avatar profile={data.profile} className="w-100 h-100 rounded-circle d-inline-grid align-items-center" />
         </Link>
       </div>
     </header>
