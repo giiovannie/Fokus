@@ -15,7 +15,10 @@ durante este bloque.
 - NODE_ENV=production. Render proporciona PORT (predeterminado 10000); el
   servidor escucha ese puerto en 0.0.0.0.
 - FRONTEND_URL: origen HTTPS exacto del Static Site, sin ruta ni comodines.
-  CORS acepta únicamente ese origen; rechaza otros con 403. Solicitudes sin
+  CORS acepta ese origen y los configurados en CORS_ADDITIONAL_ORIGINS;
+  rechaza otros con 403. Para Fokus Android usar CORS_ADDITIONAL_ORIGINS=https://localhost.
+  La lista adicional es opcional, separada por comas, sin rutas ni comodines;
+  en producción solo admite HTTPS. Solicitudes sin
   Origin, como healthchecks y clientes no navegador, siguen funcionando.
   CORS no sustituye autenticación ni limita clientes fuera de navegadores.
 - Configurar DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT y JWT_SECRET mediante

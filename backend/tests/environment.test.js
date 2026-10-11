@@ -12,6 +12,15 @@ const production = () => ({
 const cloud = { CLOUDINARY_CLOUD_NAME: 'test-cloud', CLOUDINARY_API_KEY: '123456', CLOUDINARY_API_SECRET: 'test-only-key' }
 
 describe('validateEnvironment', () => {
+  it('acepta orígenes adicionales HTTPS explícitos', () => {
+    expect(() => validateEnvironment({ ...production(), CORS_ADDITIONAL_ORIGINS: 'https://localhost, https://other.example.test/' })).not.toThrow()
+  })
+  it.each(['*', 'https://*.example.test', 'https://example.test/path', 'https://example.test?x=1', 'https://example.test#x', 'https://user:password@example.test', 'null', 'https://localhost,', '   ', 'http://localhost'])('rechaza la lista CORS inválida %s en producción', (value) => {
+    expect(() => validateEnvironment({ ...production(), CORS_ADDITIONAL_ORIGINS: value })).toThrow('CORS_ADDITIONAL_ORIGINS')
+  })
+  it('permite orígenes HTTP explícitos en desarrollo', () => {
+    expect(() => validateEnvironment({ ...development(), CORS_ADDITIONAL_ORIGINS: 'http://localhost:8080' })).not.toThrow()
+  })
   it('conserva los valores predeterminados de desarrollo sin exigir Cloudinary', () => {
     expect(validateEnvironment(development())).toEqual({ nodeEnv: 'development', port: 3000 })
   })

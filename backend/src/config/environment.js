@@ -7,6 +7,23 @@ export class EnvironmentError extends Error {
   }
 }
 
+export const getCorsOrigins = (env = process.env) => {
+  const origins = [new URL(env.FRONTEND_URL || 'http://localhost:5173').origin]
+  if (env.CORS_ADDITIONAL_ORIGINS) {
+    for (const entry of env.CORS_ADDITIONAL_ORIGINS.split(',')) {
+      let url
+      try { url = new URL(entry.trim()) } catch { throw new EnvironmentError('CORS_ADDITIONAL_ORIGINS') }
+      if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password ||
+        url.pathname !== '/' || url.search || url.hash || url.hostname.includes('*') ||
+        (env.NODE_ENV === 'production' && url.protocol !== 'https:')) {
+        throw new EnvironmentError('CORS_ADDITIONAL_ORIGINS')
+      }
+      origins.push(url.origin)
+    }
+  }
+  return new Set(origins)
+}
+
 export const validateEnvironment = (env = process.env) => {
   const fail = (name) => { throw new EnvironmentError(name) }
   const hasValue = (name) => typeof env[name] === 'string' && env[name].trim() !== ''
@@ -54,5 +71,6 @@ export const validateEnvironment = (env = process.env) => {
     if (!/^\d+$/.test(env.CLOUDINARY_API_KEY)) fail('CLOUDINARY_API_KEY')
   }
 
+  getCorsOrigins(env)
   return { nodeEnv: mode, port: Number(env.PORT) || 3000 }
 }
