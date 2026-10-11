@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useAppData } from '../../hooks/useAppData.js'
+import { ThemeToggle } from './ThemeToggle.jsx'
 import { Avatar } from './Avatar.jsx'
 
 const Topbar = ({ onMenu }) => {
@@ -14,6 +15,7 @@ const Topbar = ({ onMenu }) => {
         <strong>Hola, {data.profile.nickname}</strong>
       </div>
       <div className="d-flex align-items-center gap-2">
+        <ThemeToggle />
         <Link className="btn btn-light position-relative" to="/notifications" aria-label="Notificaciones">
           🔔
           {unread > 0 && <span className="notification-count">{unread}</span>}

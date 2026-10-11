@@ -2,6 +2,14 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      (() => {
+        let theme = 'light'
+        try { if (localStorage.getItem('fokus-theme') === 'dark') theme = 'dark' } catch {}
+        document.documentElement.setAttribute('data-bs-theme', theme)
+        document.documentElement.style.colorScheme = theme
+      })()
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Organizador académico para centralizar materias, tareas y exámenes." />
     <meta name="theme-color" content="#0F766E" />

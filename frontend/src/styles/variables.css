@@ -11,4 +11,36 @@
   --color-warning: #EAB308;
   --color-danger: #E11D48;
   --color-info: #2563EB;
+  --border-subtle: rgb(30 41 59 / 8%);
+  --bg-topbar: rgb(248 250 252 / 92%);
+  --bg-highlight: rgb(15 118 110 / 10%);
+  --bg-unread: rgb(15 118 110 / 6%);
+}
+
+[data-bs-theme="dark"] {
+  --color-primary: #5EEAD4;
+  --color-secondary: #2DD4BF;
+  --bg-main: #0F172A;
+  --bg-secondary: #253449;
+  --bg-card: #182335;
+  --text-main: #E2E8F0;
+  --text-secondary: #A8B8CC;
+  --color-success: #6EE7B7;
+  --color-warning: #FACC15;
+  --color-danger: #FDA4AF;
+  --color-info: #93C5FD;
+  --border-subtle: #3B4A60;
+  --bg-topbar: rgb(15 23 42 / 94%);
+  --bg-highlight: rgb(94 234 212 / 12%);
+  --bg-unread: rgb(94 234 212 / 8%);
+  --bs-body-bg: var(--bg-main);
+  --bs-body-color: var(--text-main);
+  --bs-secondary-color: var(--text-secondary);
+  --bs-secondary-bg: var(--bg-secondary);
+  --bs-tertiary-bg: var(--bg-card);
+  --bs-border-color: var(--border-subtle);
+  --bs-link-color: var(--color-primary);
+  --bs-link-color-rgb: 94, 234, 212;
+  --bs-link-hover-color: #99F6E4;
+  --bs-link-hover-color-rgb: 153, 246, 228;
 }
