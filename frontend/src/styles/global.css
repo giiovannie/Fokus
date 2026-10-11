@@ -388,3 +388,20 @@ a {
 [data-bs-theme="dark"] .status-pending,
 [data-bs-theme="dark"] .status-completed { color: #0F172A; }
 [data-bs-theme="dark"] .skip-link { background: #0F766E; }
+
+.form-modal {
+  width: min(36rem, calc(100% - 2rem));
+  max-height: calc(100dvh - 2rem);
+  margin: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0.75rem;
+  background: var(--bg-card);
+  color: var(--text-main);
+}
+.form-modal::backdrop { background: rgb(0 0 0 / 55%); }
+.form-modal .modal-content { max-height: calc(100dvh - 2rem); }
+.form-modal .modal-body { overflow-y: auto; min-height: 0; }
+.form-modal .card { box-shadow: none; }
+.form-modal fieldset { min-width: 0; }
+.no-due-date-control .form-check-input { border-radius: 50%; }

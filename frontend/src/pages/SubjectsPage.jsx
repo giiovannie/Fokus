@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { FormModal } from '../components/ui/FormModal.jsx'
 import { EmptyState } from '../components/ui/EmptyState.jsx'
 import { PageHeader } from '../components/ui/PageHeader.jsx'
 import { ConfirmButton } from '../components/ui/ConfirmButton.jsx'
@@ -11,15 +12,22 @@ const SubjectsPage = () => {
   const [form, setForm] = useState(emptySubject)
   const [editingId, setEditingId] = useState(null)
   const [teacherName, setTeacherName] = useState('')
+  const [dialog, setDialog] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState(null)
 
   const submitSubject = async (event) => {
     event.preventDefault()
+    if (saving) return
     if (!form.name || !form.teacher_id) return notify('Completá la materia y el profesor.', 'danger')
     const values = { ...form, teacher_id: Number(form.teacher_id) }
+    setSaving(true); setFormError(null)
     const succeeded = editingId
       ? await updateItem('subjects', editingId, values)
       : await addItem('subjects', values)
-    if (!succeeded) return
+    setSaving(false)
+    if (!succeeded) { setFormError('No se pudo guardar la materia. Revisá los datos y volvé a intentar.'); return }
+    setDialog(null)
     notify(editingId ? 'Materia actualizada.' : 'Materia creada.')
     setForm(emptySubject)
     setEditingId(null)
@@ -27,17 +35,36 @@ const SubjectsPage = () => {
 
   const submitTeacher = async (event) => {
     event.preventDefault()
+    if (saving) return
     if (!teacherName.trim()) return
-    if (!await addItem('teachers', { name: teacherName.trim() })) return
+    setSaving(true); setFormError(null)
+    const succeeded = await addItem('teachers', { name: teacherName.trim() })
+    setSaving(false)
+    if (!succeeded) { setFormError('No se pudo agregar el profesor. Volvé a intentar.'); return }
+    setDialog(null)
     setTeacherName('')
     notify('Profesor agregado.')
   }
 
+  const subjectForm = <form onSubmit={submitSubject}>
+              <label className="form-label" htmlFor="subject-name">Nombre</label>
+              <input className="form-control mb-3" id="subject-name" required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+              <label className="form-label" htmlFor="subject-teacher">Profesor</label>
+              <select className="form-select mb-3" id="subject-teacher" required value={form.teacher_id} onChange={(event) => setForm({ ...form, teacher_id: event.target.value })}>
+                <option value="">Seleccionar</option>{data.teachers.map((teacher) => <option key={teacher.id} value={teacher.id}>{teacher.name}</option>)}
+              </select>
+              <button className="btn btn-primary w-100" type="submit">{editingId ? 'Guardar cambios' : 'Crear materia'}</button>
+              {editingId && <button className="btn btn-link w-100 mt-2" onClick={() => { setEditingId(null); setForm(emptySubject) }} type="button">Cancelar</button>}
+            </form>
+  const teacherForm = <form className="d-flex gap-2" onSubmit={submitTeacher}><label className="visually-hidden" htmlFor="teacher-name">Nombre del profesor</label><input className="form-control" id="teacher-name" required value={teacherName} onChange={(event) => setTeacherName(event.target.value)} placeholder="Nombre completo" /><button className="btn btn-secondary" type="submit">Agregar</button></form>
+
   return (
     <>
-      <PageHeader eyebrow="Cursada" title="Materias" description="Administrá tus materias y profesores." />
+      <PageHeader eyebrow="Cursada" title="Materias" description="Administrá tus materias y profesores.">
+        <div className="d-flex flex-wrap gap-2"><button className="btn btn-primary" type="button" onClick={() => { setEditingId(null); setForm(emptySubject); setFormError(null); setDialog('subject') }}>Crear materia</button><button className="btn btn-outline-secondary" type="button" onClick={() => { setTeacherName(''); setFormError(null); setDialog('teacher') }}>Agregar profesor</button></div>
+      </PageHeader>
       <div className="row g-4">
-        <div className="col-12 col-xl-8">
+        <div className={editingId ? "col-12 col-xl-8" : "col-12"}>
           {data.subjects.length === 0 ? <EmptyState title="Todavía no hay materias" message="Creá tu primera materia para comenzar." /> : (
             <div className="row g-3">
               {data.subjects.map((subject) => {
@@ -60,26 +87,9 @@ const SubjectsPage = () => {
             </div>
           )}
         </div>
-        <div className="col-12 col-xl-4">
-          <div className="card border-0 mb-4"><div className="card-body p-4">
-            <h2 className="h5 mb-3">{editingId ? 'Editar materia' : 'Nueva materia'}</h2>
-            <form onSubmit={submitSubject}>
-              <label className="form-label" htmlFor="subject-name">Nombre</label>
-              <input className="form-control mb-3" id="subject-name" required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
-              <label className="form-label" htmlFor="subject-teacher">Profesor</label>
-              <select className="form-select mb-3" id="subject-teacher" required value={form.teacher_id} onChange={(event) => setForm({ ...form, teacher_id: event.target.value })}>
-                <option value="">Seleccionar</option>{data.teachers.map((teacher) => <option key={teacher.id} value={teacher.id}>{teacher.name}</option>)}
-              </select>
-              <button className="btn btn-primary w-100" type="submit">{editingId ? 'Guardar cambios' : 'Crear materia'}</button>
-              {editingId && <button className="btn btn-link w-100 mt-2" onClick={() => { setEditingId(null); setForm(emptySubject) }} type="button">Cancelar</button>}
-            </form>
-          </div></div>
-          <div className="card border-0"><div className="card-body p-4">
-            <h2 className="h6 mb-3">Agregar profesor</h2>
-            <form className="d-flex gap-2" onSubmit={submitTeacher}><label className="visually-hidden" htmlFor="teacher-name">Nombre del profesor</label><input className="form-control" id="teacher-name" required value={teacherName} onChange={(event) => setTeacherName(event.target.value)} placeholder="Nombre completo" /><button className="btn btn-secondary" type="submit">Agregar</button></form>
-          </div></div>
-        </div>
+        {editingId && <div className="col-12 col-xl-4"><div className="card border-0"><div className="card-body p-4"><h2 className="h5">Editar materia</h2>{subjectForm}</div></div></div>}
       </div>
+      <FormModal open={dialog !== null} title={dialog === 'subject' ? 'Crear materia' : 'Agregar profesor'} busy={saving} error={formError} onClose={() => setDialog(null)}>{dialog === 'subject' ? subjectForm : teacherForm}</FormModal>
     </>
   )
 }

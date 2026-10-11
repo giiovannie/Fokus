@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { FormModal } from '../components/ui/FormModal.jsx'
 import { EmptyState } from '../components/ui/EmptyState.jsx'
 import { PageHeader } from '../components/ui/PageHeader.jsx'
 import { ConfirmButton } from '../components/ui/ConfirmButton.jsx'
@@ -14,18 +15,25 @@ const TasksPage = () => {
   const [filter, setFilter] = useState('all')
   const [form, setForm] = useState(initialForm)
   const [editingId, setEditingId] = useState(null)
+  const [creating, setCreating] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState(null)
   const [noteDrafts, setNoteDrafts] = useState({})
   const [editingNote, setEditingNote] = useState({ id: null, content: '' })
   const visibleTasks = useMemo(() => filter === 'all' ? data.tasks : data.tasks.filter(({ status }) => status === filter), [data.tasks, filter])
 
   const submit = async (event) => {
     event.preventDefault()
-    if (!form.title || !form.due_date || !form.subject_id) return notify('Completá los campos obligatorios.', 'danger')
+    if (saving) return
+    if (!form.title || (form.due_date !== null && !form.due_date) || !form.subject_id) return notify('Completá los campos obligatorios.', 'danger')
     const values = { ...form, subject_id: Number(form.subject_id) }
+    setSaving(true); setFormError(null)
     const succeeded = editingId
       ? await updateItem('tasks', editingId, values)
       : await addItem('tasks', { ...values, status: 'pending' })
-    if (!succeeded) return
+    setSaving(false)
+    if (!succeeded) { setFormError('No se pudo guardar. Revisá los datos y volvé a intentar.'); return }
+    setCreating(false)
     setForm(initialForm); setEditingId(null); notify(editingId ? 'Tarea actualizada.' : 'Tarea creada.')
   }
 
@@ -38,9 +46,11 @@ const TasksPage = () => {
 
   return (
     <>
-      <PageHeader eyebrow="Planificación" title="Tareas" description="Seguí pendientes, avances y tareas completadas." />
+      <PageHeader eyebrow="Planificación" title="Tareas" description="Seguí pendientes, avances y tareas completadas.">
+        <button className="btn btn-primary" type="button" onClick={() => { setForm(initialForm); setEditingId(null); setFormError(null); setCreating(true) }}>Crear tarea</button>
+      </PageHeader>
       <div className="row g-4">
-        <div className="col-12 col-xl-8">
+        <div className={editingId ? "col-12 col-xl-8" : "col-12"}>
           <div className="d-flex flex-wrap gap-2 mb-3">
             {[['all', 'Todas'], ['pending', 'Pendientes'], ['in_progress', 'En progreso'], ['completed', 'Completadas']].map(([value, label]) => <button className={`btn btn-sm ${filter === value ? 'btn-primary' : 'btn-light'}`} key={value} onClick={() => setFilter(value)} type="button">{label}</button>)}
           </div>
@@ -58,8 +68,11 @@ const TasksPage = () => {
             </div></article>
           ))}
         </div>
-        <div className="col-12 col-xl-4"><TaskForm editing={Boolean(editingId)} form={form} subjects={data.subjects} onCancel={() => { setEditingId(null); setForm(initialForm) }} onChange={(field, value) => setForm({ ...form, [field]: value })} onSubmit={submit} /></div>
+        {editingId && <div className="col-12 col-xl-4"><TaskForm editing={Boolean(editingId)} form={form} subjects={data.subjects} onCancel={() => { setEditingId(null); setForm(initialForm) }} onChange={(field, value) => setForm({ ...form, [field]: value })} onSubmit={submit} /></div>}
       </div>
+      <FormModal open={creating} title="Crear tarea" busy={saving} error={formError} onClose={() => setCreating(false)}>
+        <TaskForm inModal form={form} subjects={data.subjects} onChange={(field, value) => setForm({ ...form, [field]: value })} onSubmit={submit} />
+      </FormModal>
     </>
   )
 }

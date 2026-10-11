@@ -1,5 +1,5 @@
-const ExamForm = ({ editing, form, subjects, onCancel, onChange, onSubmit }) => (
-  <div className="card border-0 form-card sticky-xl-top">
+const ExamForm = ({ editing, form, subjects, onCancel, onChange, onSubmit, inModal = false }) => (
+  <div className={inModal ? "card border-0" : "card border-0 form-card sticky-xl-top"}>
     <div className="card-body p-4">
       <h2 className="h5 mb-3">{editing ? 'Editar examen' : 'Nuevo examen'}</h2>
       <form onSubmit={onSubmit}>

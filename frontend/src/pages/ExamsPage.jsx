@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { FormModal } from '../components/ui/FormModal.jsx'
 import { EmptyState } from '../components/ui/EmptyState.jsx'
 import { PageHeader } from '../components/ui/PageHeader.jsx'
 import { ConfirmButton } from '../components/ui/ConfirmButton.jsx'
@@ -12,23 +13,32 @@ const ExamsPage = () => {
   const { data, addItem, updateItem, removeItem, notify } = useAppData()
   const [form, setForm] = useState(initialForm)
   const [editingId, setEditingId] = useState(null)
+  const [creating, setCreating] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState(null)
 
   const submit = async (event) => {
     event.preventDefault()
+    if (saving) return
     if (!form.title || !form.exam_date || !form.subject_id) return notify('Completá los campos obligatorios.', 'danger')
     const values = { ...form, subject_id: Number(form.subject_id) }
+    setSaving(true); setFormError(null)
     const succeeded = editingId
       ? await updateItem('exams', editingId, values)
       : await addItem('exams', { ...values, grade: null })
-    if (!succeeded) return
+    setSaving(false)
+    if (!succeeded) { setFormError('No se pudo guardar. Revisá los datos y volvé a intentar.'); return }
+    setCreating(false)
     setForm(initialForm); setEditingId(null); notify(editingId ? 'Examen actualizado.' : 'Examen creado.')
   }
 
   return (
     <>
-      <PageHeader eyebrow="Evaluaciones" title="Exámenes" description="Consultá fechas, temas y calificaciones." />
+      <PageHeader eyebrow="Evaluaciones" title="Exámenes" description="Consultá fechas, temas y calificaciones.">
+        <button className="btn btn-primary" type="button" onClick={() => { setForm(initialForm); setEditingId(null); setFormError(null); setCreating(true) }}>Crear examen</button>
+      </PageHeader>
       <div className="row g-4">
-        <div className="col-12 col-xl-8">
+        <div className={editingId ? "col-12 col-xl-8" : "col-12"}>
           {data.exams.length === 0 ? <EmptyState title="No hay exámenes" message="Agendá tu primera evaluación." /> : (
             <div className="row g-3">{data.exams.map((exam) => {
               const days = daysRemaining(exam.exam_date)
@@ -42,8 +52,11 @@ const ExamsPage = () => {
             })}</div>
           )}
         </div>
-        <div className="col-12 col-xl-4"><ExamForm editing={Boolean(editingId)} form={form} subjects={data.subjects} onCancel={() => { setEditingId(null); setForm(initialForm) }} onChange={(field, value) => setForm({ ...form, [field]: value })} onSubmit={submit} /></div>
+        {editingId && <div className="col-12 col-xl-4"><ExamForm editing={Boolean(editingId)} form={form} subjects={data.subjects} onCancel={() => { setEditingId(null); setForm(initialForm) }} onChange={(field, value) => setForm({ ...form, [field]: value })} onSubmit={submit} /></div>}
       </div>
+      <FormModal open={creating} title="Crear examen" busy={saving} error={formError} onClose={() => setCreating(false)}>
+        <ExamForm inModal form={form} subjects={data.subjects} onChange={(field, value) => setForm({ ...form, [field]: value })} onSubmit={submit} />
+      </FormModal>
     </>
   )
 }
