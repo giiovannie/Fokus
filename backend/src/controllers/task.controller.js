@@ -2,7 +2,7 @@ import { Subject, Task } from '../models/index.js'
 import { createHttpError } from '../utils/httpError.js'
 import { pick } from '../utils/pick.js'
 
-const taskAttributes = ['id', 'title', 'description', 'due_date', 'status', 'subject_id']
+const taskAttributes = ['id', 'title', 'description', 'due_date', 'due_time', 'status', 'subject_id']
 
 const findOwnedSubject = async (subjectId, userId) => {
   const subject = await Subject.findOne({ where: { id: subjectId, user_id: userId } })
@@ -53,7 +53,7 @@ export const getTask = async (req, res, next) => {
 export const createTask = async (req, res, next) => {
   try {
     await findOwnedSubject(req.body.subject_id, req.user.id)
-    const task = await Task.create(pick(req.body, ['title', 'description', 'due_date', 'subject_id']))
+    const task = await Task.create(pick(req.body, ['title', 'description', 'due_date', 'due_time', 'subject_id']))
     return res.status(201).json(taskAttributes.reduce((data, key) => ({ ...data, [key]: task[key] }), {}))
   } catch (error) {
     return next(error)
@@ -64,7 +64,7 @@ export const updateTask = async (req, res, next) => {
   try {
     const task = await findOwnedTask(req.params.id, req.user.id)
     if (req.body.subject_id) await findOwnedSubject(req.body.subject_id, req.user.id)
-    await task.update(pick(req.body, ['title', 'description', 'due_date', 'subject_id']))
+    await task.update(pick(req.body, ['title', 'description', 'due_date', 'due_time', 'subject_id']))
     return res.json(taskAttributes.reduce((data, key) => ({ ...data, [key]: task[key] }), {}))
   } catch (error) {
     return next(error)

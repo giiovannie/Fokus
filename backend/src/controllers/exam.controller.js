@@ -2,7 +2,7 @@ import { Exam, Subject } from '../models/index.js'
 import { createHttpError } from '../utils/httpError.js'
 import { pick } from '../utils/pick.js'
 
-const examAttributes = ['id', 'title', 'exam_date', 'topics', 'grade', 'subject_id']
+const examAttributes = ['id', 'title', 'exam_date', 'exam_time', 'topics', 'grade', 'subject_id']
 
 const findOwnedSubject = async (subjectId, userId) => {
   const subject = await Subject.findOne({ where: { id: subjectId, user_id: userId } })
@@ -45,7 +45,7 @@ export const getExam = async (req, res, next) => {
 export const createExam = async (req, res, next) => {
   try {
     await findOwnedSubject(req.body.subject_id, req.user.id)
-    const exam = await Exam.create(pick(req.body, ['title', 'exam_date', 'topics', 'subject_id']))
+    const exam = await Exam.create(pick(req.body, ['title', 'exam_date', 'exam_time', 'topics', 'subject_id']))
     return res.status(201).json(examAttributes.reduce((data, key) => ({ ...data, [key]: exam[key] }), {}))
   } catch (error) { return next(error) }
 }
@@ -54,7 +54,7 @@ export const updateExam = async (req, res, next) => {
   try {
     const exam = await findOwnedExam(req.params.id, req.user.id)
     if (req.body.subject_id) await findOwnedSubject(req.body.subject_id, req.user.id)
-    await exam.update(pick(req.body, ['title', 'exam_date', 'topics', 'subject_id']))
+    await exam.update(pick(req.body, ['title', 'exam_date', 'exam_time', 'topics', 'subject_id']))
     return res.json(examAttributes.reduce((data, key) => ({ ...data, [key]: exam[key] }), {}))
   } catch (error) { return next(error) }
 }

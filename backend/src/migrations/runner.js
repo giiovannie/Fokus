@@ -20,9 +20,10 @@ export const loadMigrations = async () => {
   return Promise.all(names.map(async (name) => {
     const url = new URL(name, directory)
     const source = await readFile(url)
-    const { table, columns } = await import(url.href)
+    const { table, columns, kind = 'create_table' } = await import(url.href)
+    if (!['create_table', 'add_columns'].includes(kind)) throw new MigrationError('Tipo de migración desconocido')
     const checksum = migrationChecksum(source, helper)
-    return { name, checksum, table, columns }
+    return { name, checksum, table, columns, kind }
   }))
 }
 
@@ -47,8 +48,26 @@ const readState = async (query, migrations) => {
     if (!findTable(migrations[i].table)) throw new MigrationError('Falta una tabla registrada en el historial de migraciones')
   }
   const pending = migrations.slice(applied.length)
-  if (pending.some((item) => findTable(item.table)) || (!historyTable && tables.length > 0)) {
+  if (pending.some((item) => item.kind === 'create_table' && findTable(item.table)) || (!historyTable && tables.length > 0)) {
     throw new MigrationError('Base existente o migración parcial sin historial válido; requiere revisión y respaldo antes de continuar')
+  }
+  // Verificar columnas aditivas sin adoptar un ALTER parcial ni repetirlo.
+  for (const [index, item] of migrations.entries()) {
+    if (item.kind !== 'add_columns') continue
+    const actualTable = findTable(item.table)
+    if (!actualTable) {
+      if (index < applied.length) throw new MigrationError('Falta una tabla registrada en el historial de migraciones')
+      continue
+    }
+    const fields = await query(`SHOW COLUMNS FROM \`${actualTable.replaceAll('\`', '\`\`')}\``)
+    const expected = Object.keys(item.columns())
+    const present = expected.filter(name => fields.some(field => field.Field === name))
+    if (index < applied.length) {
+      if (present.length !== expected.length || fields.some(field => expected.includes(field.Field) &&
+        (field.Type.toLowerCase() !== 'time' || field.Null !== 'YES' || field.Default !== null))) {
+        throw new MigrationError('Las columnas de una migración aplicada no coinciden con el esquema esperado')
+      }
+    } else if (present.length) throw new MigrationError('Migración parcial de columnas sin historial válido')
   }
   return { applied, pending, tables, historyTable }
 }
@@ -69,7 +88,16 @@ export const createTableSql = (sequelize, table, columns) => {
   const normalized = Object.fromEntries(Object.entries(columns).map(([name, column]) => [name, sequelize.normalizeAttribute(column)]))
   const attributes = generator.attributesToSQL(normalized, { table, context: 'createTable' })
   // Sin IF NOT EXISTS: nunca aceptar silenciosamente una tabla con otro esquema.
-  return generator.createTableQuery(table, attributes, { engine: 'InnoDB' }).replace('CREATE TABLE IF NOT EXISTS', 'CREATE TABLE')
+  const sql = generator.createTableQuery(table, attributes, { engine: 'InnoDB' }).replace('CREATE TABLE IF NOT EXISTS', 'CREATE TABLE')
+  // attributesToSQL no genera las restricciones UNIQUE multicolumna.
+  const groups = new Map()
+  for (const [name, column] of Object.entries(columns)) {
+    if (typeof column.unique !== 'string') continue
+    groups.set(column.unique, [...(groups.get(column.unique) || []), name])
+  }
+  const uniques = [...groups].map(([name, fields]) => 'UNIQUE KEY ' + generator.quoteIdentifier(name) +
+    ' (' + fields.map(field => generator.quoteIdentifier(field)).join(', ') + ')')
+  return uniques.length ? sql.replace(/\) ENGINE=/, ', ' + uniques.join(', ') + ') ENGINE=') : sql
 }
 
 export const migrate = async (sequelize) => {
@@ -90,7 +118,14 @@ export const migrate = async (sequelize) => {
     // MySQL DDL no permite rollback de todo el lote. Registrar cada tabla solo
     // después de crearla; cualquier fallo detiene el proceso sin eliminar datos.
     for (const item of state.pending) {
-      await query(createTableSql(sequelize, item.table, item.columns()))
+      if (item.kind === 'add_columns') {
+        const generator = sequelize.getQueryInterface().queryGenerator
+        const definitions = Object.entries(item.columns()).map(([name, column]) =>
+          'ADD COLUMN ' + generator.quoteIdentifier(name) + ' ' + generator.attributeToSQL(sequelize.normalizeAttribute(column), { context: 'addColumn' }))
+        await query('ALTER TABLE ' + generator.quoteTable(item.table) + ' ' + definitions.join(', '))
+      } else {
+        await query(createTableSql(sequelize, item.table, item.columns()))
+      }
       await query(`INSERT INTO \`${metadataTable}\` (name, checksum) VALUES (?, ?)`, [item.name, item.checksum])
     }
   } finally {

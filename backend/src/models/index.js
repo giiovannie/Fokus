@@ -1,4 +1,6 @@
 import { sequelize } from '../config/database.js'
+import { NotificationPreference } from './NotificationPreference.js'
+import { NotificationRule } from './NotificationRule.js'
 import { Exam } from './Exam.js'
 import { Profile } from './Profile.js'
 import { StudyActivity } from './StudyActivity.js'
@@ -29,4 +31,9 @@ Exam.belongsTo(Subject, { foreignKey: 'subject_id', as: 'subject' })
 Subject.hasMany(StudyActivity, { foreignKey: 'subject_id', as: 'study_activities', onDelete: 'CASCADE' })
 StudyActivity.belongsTo(Subject, { foreignKey: 'subject_id', as: 'subject' })
 
-export { Exam, Profile, sequelize, StudyActivity, Subject, Task, TaskNote, Teacher, User }
+User.hasOne(NotificationPreference, { foreignKey: 'user_id', as: 'notification_preferences', onDelete: 'CASCADE' })
+NotificationPreference.belongsTo(User, { foreignKey: 'user_id', as: 'user' })
+User.hasMany(NotificationRule, { foreignKey: 'user_id', as: 'notification_rules', onDelete: 'CASCADE' })
+NotificationRule.belongsTo(User, { foreignKey: 'user_id', as: 'user' })
+
+export { NotificationPreference, NotificationRule, Exam, Profile, sequelize, StudyActivity, Subject, Task, TaskNote, Teacher, User }

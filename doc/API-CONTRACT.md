@@ -1080,3 +1080,63 @@ GET    /api/dashboard/upcoming
 NOTIFICATIONS
 GET    /api/notifications
 ```
+
+
+# Web Push: preferencias y reglas
+
+Configuración web/PWA; el transporte push y planificador se implementarán después.
+Todas las rutas requieren JWT Bearer; el usuario se obtiene de req.user.id.
+GET /api/notifications conserva su comportamiento.
+
+## Preferencias
+
+GET /api/notifications/preferences devuelve valores predeterminados sin insertar filas.
+PUT /api/notifications/preferences reemplaza los campos siguientes (todos obligatorios):
+
+```json
+{
+  "enabled": false, "timezone": "America/Argentina/Cordoba",
+  "exams_enabled": false, "tasks_enabled": false,
+  "exam_default_time": "09:00", "task_default_time": "09:00",
+  "exam_style": "formal", "task_style": "formal",
+  "unfiltered_enabled": false, "quiet_hours_enabled": false,
+  "quiet_start": null, "quiet_end": null
+}
+```
+
+Respuesta 200: esos campos más revision y unfiltered_consented_at (UTC o null).
+Estilos: formal, friendly, motivating, sarcastic, unfiltered; visibles en español.
+Sin filtro requiere unfiltered_enabled=true explícito; consentimiento registrado por
+el servidor. Revocación exige elegir estilos distintos de unfiltered.
+Zona IANA editable; horas HH:mm. Silencio activo exige inicio y fin diferentes;
+inactivo exige ambos null. Puede cruzar medianoche. Campos desconocidos se rechazan.
+No aceptar user_id, revision ni fecha de consentimiento del cliente.
+
+## Reglas
+
+GET /api/notifications/rules (filtro opcional event_type=exam|task).
+POST /api/notifications/rules (201). PUT /api/notifications/rules/:id (200).
+DELETE /api/notifications/rules/:id (204). Solo reglas propias.
+Cuerpo POST/PUT completo: { event_type, amount, unit, enabled }.
+amount: entero >=0; unit: minutes, hours o days; enabled: booleano.
+Respuesta: { id, event_type, offset_minutes, enabled }; horas x60 y días x1440.
+Máximo 5 reglas por tipo y estudiante, incluyendo desactivadas; hasta 43200 minutos
+(30 días) por regla; 0 permite aviso a la hora efectiva. Duplicados por tipo/duración:409.
+JWT inválido:401; regla inexistente/ajena:404; validaciones:400; límite excedido:409.
+Las escrituras se serializan por usuario para no superar el límite concurrentemente.
+
+## Hora del evento y cálculo
+
+Agregar exam_time a exámenes y due_time a tareas, opcionales HH:mm o null.
+Fecha YYYY-MM-DD obligatoria en creación; omitir hora conserva compatibilidad.
+En actualización, omitir conserva y null elimina. Persistencia TIME HH:mm:00.
+Hora explícita prevalece sobre fallback del tipo. Fecha/hora se interpretan en zona
+del estudiante; duración se resta en minutos transcurridos y los instantes usan UTC.
+Hora inexistente por DST: primera hora válida posterior; ambigua: primera ocurrencia.
+Silencio: aplazar hasta el final solo si no pasó el evento; omitir si lo supera.
+No enviar exámenes al alcanzar/pasar su hora efectiva; tareas completadas cancelan
+pendientes. Los avisos en el instante exacto del examen se omiten por esta regla.
+Cambios efectivos de preferencias/reglas incrementan revision; replanificar solo
+pendientes, sin reenviar entregados. Eventos editados se releen antes del envío.
+La cola de entregas, cancelación persistente y deduplicación de envíos pertenecen
+a la siguiente etapa, no a estos endpoints de configuración.

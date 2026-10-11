@@ -5,9 +5,10 @@ import { createHash } from 'node:crypto'
 
 const migrations = await loadMigrations()
 const history = migrations.map(({ name, checksum }) => ({ name, checksum }))
-const tables = ['FokusMigrations', ...migrations.map((item) => item.table)]
+const tables = [...new Set(['FokusMigrations', ...migrations.map((item) => item.table)])]
+const timeFields = rows => migrations.filter(item => item.kind === 'add_columns' && rows.some(row => row.name === item.name)).flatMap(item => Object.keys(item.columns()).map(Field => ({ Field, Type: 'time', Null: 'YES', Default: null })))
 const statusDb = (tableNames, rows = [], caseMode = 0) => ({
-  query: vi.fn(async (sql) => sql.includes('@@lower_case_table_names') ? [{ lower_case_table_names: caseMode }] : sql === 'SHOW TABLES' ? tableNames.map((name) => ({ table: name })) : rows),
+  query: vi.fn(async (sql) => sql.includes('@@lower_case_table_names') ? [{ lower_case_table_names: caseMode }] : sql === 'SHOW TABLES' ? tableNames.map((name) => ({ table: name })) : sql.startsWith('SHOW COLUMNS') ? timeFields(rows) : rows),
 })
 
 const migrationDb = (tableNames = [], rows = [], acquired = 1, caseMode = 0) => {
@@ -16,6 +17,7 @@ const migrationDb = (tableNames = [], rows = [], acquired = 1, caseMode = 0) => 
     if (sql.includes('RELEASE_LOCK')) return [[{ released: 1 }]]
     if (sql.includes('@@lower_case_table_names')) return [[{ lower_case_table_names: caseMode }]]
     if (sql === 'SHOW TABLES') return [tableNames.map((name) => ({ table: name }))]
+    if (sql.startsWith('SHOW COLUMNS')) return [timeFields(rows)]
     if (sql.startsWith('SELECT name')) return [rows]
     return [[]]
   })
@@ -36,13 +38,14 @@ describe('migraciones del esquema actual', () => {
     expect(migrationChecksum('migration\r\n', 'schema\r\n')).toBe(current)
     expect(migrationChecksum('changed\n', helper)).not.toBe(current)
   })
-  it('reproduce todos los atributos físicos y relaciones de los ocho modelos', () => {
-    expect(migrations).toHaveLength(8)
-    for (const item of migrations) {
+  it('reproduce todos los atributos físicos y relaciones de todos los modelos', () => {
+    expect(migrations).toHaveLength(12)
+    for (const item of migrations.filter(item => item.kind === 'create_table')) {
       const model = Object.values(sequelize.models).find((value) => value.tableName === item.table)
       const columns = item.columns()
       const physical = Object.fromEntries(Object.values(model.rawAttributes).map((attr) => [attr.field, attr]))
-      expect(Object.keys(columns).sort()).toEqual(Object.keys(physical).sort())
+      const added = migrations.filter(m => m.kind === 'add_columns' && m.table === item.table).flatMap(m => Object.keys(m.columns()))
+      expect(Object.keys(columns).sort()).toEqual(Object.keys(physical).filter(name => !added.includes(name)).sort())
       for (const [name, column] of Object.entries(columns)) {
         const attr = physical[name]
         const generator = sequelize.getQueryInterface().queryGenerator
@@ -67,7 +70,7 @@ describe('migraciones del esquema actual', () => {
   })
   it('informa pendientes en una base vacía sin escribir', async () => {
     const db = statusDb([])
-    expect((await migrationStatus(db)).pending).toHaveLength(8)
+    expect((await migrationStatus(db)).pending).toHaveLength(12)
     expect(db.query).toHaveBeenCalledTimes(2)
     await expect(verifyMigrations(db)).rejects.toThrow('pendientes')
   })
@@ -106,15 +109,30 @@ describe('migraciones del esquema actual', () => {
   it('rechaza migraciones parciales sin adoptar tablas', async () => {
     await expect(migrationStatus(statusDb(['FokusMigrations', 'users', 'profiles'], [history[0]]))).rejects.toThrow('parcial')
   })
+  it('detecta columnas aditivas parciales e incompatibles sin escribir', async () => {
+    const beforeAdd = history.slice(0, 10)
+    const partial = statusDb(tables, beforeAdd)
+    const implementation = partial.query.getMockImplementation()
+    partial.query.mockImplementation(sql => sql.startsWith('SHOW COLUMNS') ? [{ Field: 'exam_time', Type: 'time', Null: 'YES', Default: null }] : implementation(sql))
+    await expect(migrationStatus(partial)).rejects.toThrow('parcial')
+    const wrong = statusDb(tables, history)
+    const original = wrong.query.getMockImplementation()
+    wrong.query.mockImplementation(sql => sql.startsWith('SHOW COLUMNS') ? [{ Field: 'exam_time', Type: 'varchar(20)', Null: 'YES', Default: null }] : original(sql))
+    await expect(verifyMigrations(wrong)).rejects.toThrow('no coinciden')
+    expect(wrong.query.mock.calls.every(([sql]) => /^(SELECT|SHOW)/.test(sql))).toBe(true)
+  })
   it('crea y registra en orden usando una misma conexión y bloqueo exclusivo', async () => {
     const { db, query } = migrationDb()
     await migrate(db)
-    const writes = query.mock.calls.filter(([sql]) => /^(CREATE TABLE|INSERT)/.test(sql))
-    expect(writes).toHaveLength(17)
+    const writes = query.mock.calls.filter(([sql]) => /^(CREATE TABLE|ALTER TABLE|INSERT)/.test(sql))
+    expect(writes).toHaveLength(25)
     migrations.forEach((item, index) => {
-      expect(writes[index * 2 + 1][0]).toContain(`CREATE TABLE \`${item.table}\``)
+      expect(writes[index * 2 + 1][0]).toContain(`${item.kind === 'add_columns' ? 'ALTER TABLE' : 'CREATE TABLE'} \`${item.table}\``)
       expect(writes[index * 2 + 2][1]).toEqual([item.name, item.checksum])
     })
+    const ruleSql = writes.find(([sql]) => sql.startsWith('CREATE TABLE `notification_rules`'))[0]
+    expect(ruleSql).toContain('UNIQUE KEY `notification_rule_offset` (`user_id`, `event_type`, `offset_minutes`)')
+    expect(ruleSql).not.toMatch(/`user_id`[^,]+UNIQUE|`event_type`[^,]+UNIQUE|`offset_minutes`[^,]+UNIQUE/)
     expect(query.mock.calls.at(-1)[0]).toContain('RELEASE_LOCK')
     expect(db.connectionManager.releaseConnection).toHaveBeenCalledOnce()
   })
