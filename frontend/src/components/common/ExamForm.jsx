@@ -1,8 +1,8 @@
 const ExamForm = ({ editing, form, subjects, onCancel, onChange, onSubmit, inModal = false }) => (
   <div className={inModal ? "card border-0" : "card border-0 form-card sticky-xl-top"}>
-    <div className="card-body p-4">
-      <h2 className="h5 mb-3">{editing ? 'Editar examen' : 'Nuevo examen'}</h2>
-      <form onSubmit={onSubmit}>
+    <div className={inModal ? "modal-form-content" : "card-body p-4"}>
+      {!inModal && <h2 className="h5 mb-3">{editing ? 'Editar examen' : 'Nuevo examen'}</h2>}
+      <form id={inModal ? "create-exam-form" : undefined} onSubmit={onSubmit}>
         <label className="form-label" htmlFor="exam-title">Título *</label>
         <input className="form-control mb-3" id="exam-title" required value={form.title} onChange={(event) => onChange('title', event.target.value)} />
         <label className="form-label" htmlFor="exam-subject">Materia *</label>
@@ -14,7 +14,7 @@ const ExamForm = ({ editing, form, subjects, onCancel, onChange, onSubmit, inMod
         <input className="form-control mb-3" id="exam-date" required type="date" value={form.exam_date} onChange={(event) => onChange('exam_date', event.target.value)} />
         <label className="form-label" htmlFor="exam-topics">Temas</label>
         <textarea className="form-control mb-3" id="exam-topics" rows="3" value={form.topics} onChange={(event) => onChange('topics', event.target.value)} />
-        <button className="btn btn-primary w-100" type="submit">{editing ? 'Guardar cambios' : 'Crear examen'}</button>
+        {!inModal && <button className="btn btn-primary w-100" type="submit">{editing ? 'Guardar cambios' : 'Crear examen'}</button>}
         {editing && <button className="btn btn-link w-100" onClick={onCancel} type="button">Cancelar</button>}
       </form>
     </div>

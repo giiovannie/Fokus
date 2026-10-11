@@ -46,17 +46,20 @@ const SubjectsPage = () => {
     notify('Profesor agregado.')
   }
 
-  const subjectForm = <form onSubmit={submitSubject}>
+  const subjectForm = <form id={editingId ? undefined : "create-subject-form"} onSubmit={submitSubject}>
               <label className="form-label" htmlFor="subject-name">Nombre</label>
               <input className="form-control mb-3" id="subject-name" required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
               <label className="form-label" htmlFor="subject-teacher">Profesor</label>
               <select className="form-select mb-3" id="subject-teacher" required value={form.teacher_id} onChange={(event) => setForm({ ...form, teacher_id: event.target.value })}>
                 <option value="">Seleccionar</option>{data.teachers.map((teacher) => <option key={teacher.id} value={teacher.id}>{teacher.name}</option>)}
               </select>
-              <button className="btn btn-primary w-100" type="submit">{editingId ? 'Guardar cambios' : 'Crear materia'}</button>
+              {editingId && <button className="btn btn-primary w-100" type="submit">{editingId ? 'Guardar cambios' : 'Crear materia'}</button>}
               {editingId && <button className="btn btn-link w-100 mt-2" onClick={() => { setEditingId(null); setForm(emptySubject) }} type="button">Cancelar</button>}
             </form>
-  const teacherForm = <form className="d-flex gap-2" onSubmit={submitTeacher}><label className="visually-hidden" htmlFor="teacher-name">Nombre del profesor</label><input className="form-control" id="teacher-name" required value={teacherName} onChange={(event) => setTeacherName(event.target.value)} placeholder="Nombre completo" /><button className="btn btn-secondary" type="submit">Agregar</button></form>
+  const teacherForm = <form id="create-teacher-form" onSubmit={submitTeacher}>
+    <label className="form-label" htmlFor="teacher-name">Nombre del profesor</label>
+    <input className="form-control" id="teacher-name" required value={teacherName} onChange={(event) => setTeacherName(event.target.value)} placeholder="Nombre completo" />
+  </form>
 
   return (
     <>
@@ -89,7 +92,7 @@ const SubjectsPage = () => {
         </div>
         {editingId && <div className="col-12 col-xl-4"><div className="card border-0"><div className="card-body p-4"><h2 className="h5">Editar materia</h2>{subjectForm}</div></div></div>}
       </div>
-      <FormModal open={dialog !== null} title={dialog === 'subject' ? 'Crear materia' : 'Agregar profesor'} busy={saving} error={formError} onClose={() => setDialog(null)}>{dialog === 'subject' ? subjectForm : teacherForm}</FormModal>
+      <FormModal open={dialog !== null} title={dialog === 'subject' ? 'Crear materia' : 'Agregar profesor'} formId={dialog === 'subject' ? 'create-subject-form' : 'create-teacher-form'} submitLabel={dialog === 'subject' ? 'Crear materia' : 'Agregar'} busy={saving} error={formError} onClose={() => setDialog(null)}>{dialog === 'subject' ? subjectForm : teacherForm}</FormModal>
     </>
   )
 }

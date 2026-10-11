@@ -22,8 +22,8 @@ const NotificationsPage = () => {
         <div className="d-flex flex-wrap gap-2"><Link className="btn btn-primary" to="/notifications/preferences">Configurar recordatorios</Link>
         {unread > 0 && <button className="btn btn-outline-primary" onClick={markAll} type="button">Marcar todas como leídas</button>}</div>
       </PageHeader>
-      <div className="card border-0"><div className="card-body p-3 p-md-4">
-        {data.notifications.length === 0 ? <EmptyState title="Todo al día" message="No tenés notificaciones nuevas." /> : data.notifications.map((notification) => <button className={`notification-row w-100 text-start ${notification.read ? '' : 'is-unread'}`} key={notification.id} onClick={() => updateItem('notifications', notification.id, { read: true })} type="button"><span className="notification-icon" aria-hidden="true">{icons[notification.type] ?? '•'}</span><span><strong style={{ whiteSpace: 'pre-line', overflowWrap: 'anywhere' }}>{notification.message}</strong><small className="d-block text-secondary">{notification.read ? 'Leída' : 'Nueva'}</small></span></button>)}
+      <div className="card border-0"><div className="card-body notifications-list">
+        {data.notifications.length === 0 ? <EmptyState title="Todo al día" message="No tenés notificaciones nuevas." /> : data.notifications.map((notification) => <button className={`notification-row w-100 text-start ${notification.read ? '' : 'is-unread'}`} key={notification.id} onClick={() => updateItem('notifications', notification.id, { read: true })} type="button"><span className="notification-icon" aria-hidden="true">{icons[notification.type] ?? '•'}</span><span className="notification-content"><span className="notification-message">{notification.message.split('\n').map((line, index, lines) => <span className={index === 0 ? 'notification-title' : 'notification-details'} key={index}>{line}{index < lines.length - 1 ? '\n' : ''}</span>)}</span><small className="notification-status">{notification.read ? 'Leída' : 'Nueva'}</small></span></button>)}
       </div></div>
     </>
   )

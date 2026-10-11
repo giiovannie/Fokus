@@ -70,7 +70,7 @@ const TasksPage = () => {
         </div>
         {editingId && <div className="col-12 col-xl-4"><TaskForm editing={Boolean(editingId)} form={form} subjects={data.subjects} onCancel={() => { setEditingId(null); setForm(initialForm) }} onChange={(field, value) => setForm({ ...form, [field]: value })} onSubmit={submit} /></div>}
       </div>
-      <FormModal open={creating} title="Crear tarea" busy={saving} error={formError} onClose={() => setCreating(false)}>
+      <FormModal open={creating} title="Crear tarea" formId="create-task-form" busy={saving} error={formError} onClose={() => setCreating(false)}>
         <TaskForm inModal form={form} subjects={data.subjects} onChange={(field, value) => setForm({ ...form, [field]: value })} onSubmit={submit} />
       </FormModal>
     </>
