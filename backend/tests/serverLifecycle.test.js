@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { registerShutdown } from '../src/config/serverLifecycle.js'
+import { formatStartupError, registerShutdown } from '../src/config/serverLifecycle.js'
 
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks() })
 
@@ -48,5 +48,24 @@ describe('cierre ordenado', () => {
     await pending
     expect(test.closeDatabase).toHaveBeenCalledOnce()
     expect(test.processRef.exitCode).toBe(1)
+  })
+})
+
+describe('diagnóstico seguro de arranque', () => {
+  it('identifica un puerto ocupado sin imprimir la excepción completa', () => {
+    const output = formatStartupError({ code: 'EADDRINUSE', message: 'password=privada', stack: 'token privado' }, { stage: 'listen', port: 3000 })
+    expect(output).toContain('EADDRINUSE'); expect(output).toContain('puerto 3000')
+    expect(output).toContain('ya está ocupado')
+    expect(output).not.toMatch(/password|privada|token/)
+  })
+  it.each(['ECONNREFUSED', 'ER_ACCESS_DENIED_ERROR', 'ER_BAD_DB_ERROR'])('reconoce código anidado %s sin SQL ni credenciales', code => {
+    const output = formatStartupError({ name: 'SequelizeConnectionError', original: { code, sql: 'secreto-sql', message: 'usuario privado' } }, { stage: 'database' })
+    expect(output).toContain(code); expect(output).toContain('verificación de la base')
+    expect(output).not.toMatch(/secreto-sql|usuario privado/)
+  })
+  it('no refleja códigos, etapas, puertos ni mensajes arbitrarios', () => {
+    const output = formatStartupError({ code: 'secret-value', message: 'mysql://secreto', cause: { code: 'token' } }, { stage: 'password', port: 'secret' })
+    expect(output).toContain('ERROR_NO_CLASIFICADO')
+    expect(output).not.toMatch(/secret|mysql|password|token/)
   })
 })

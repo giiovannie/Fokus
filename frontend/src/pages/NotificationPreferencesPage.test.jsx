@@ -1,0 +1,203 @@
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { NotificationPreferencesPage } from './NotificationPreferencesPage.jsx'
+import { clearSession, saveSession } from '../utils/authSession.js'
+
+const defaults = { enabled: false, timezone: 'America/Argentina/Cordoba', exams_enabled: false, tasks_enabled: false, exam_default_time: '09:00', task_default_time: '09:00', exam_style: 'formal', task_style: 'formal', unfiltered_enabled: false, quiet_hours_enabled: false, quiet_start: null, quiet_end: null, revision: 1, unfiltered_consented_at: null }
+const response = (data, status = 200) => ({ ok: status < 400, status, json: async () => data })
+const open = ({ rules = [], preferences = defaults, intercept } = {}) => {
+  let currentRules = rules.map(rule => ({ ...rule })), currentPreferences = { ...preferences }, nextId = 20
+  const fetchMock = vi.fn(async (url, options) => {
+    const method = options.method || 'GET', path = String(url).split('/notifications')[1], body = options.body && JSON.parse(options.body)
+    if (path === '/push/config') return response({ enabled: false, public_key: null })
+    if (path === '/preview') return response({ title: 'Fokus · Notificación de prueba', body: '[PRUEBA] Examen de Matemática', phrase: 'Ejemplo' })
+    const override = intercept?.({ path, method, body })
+    if (override !== undefined) return override
+    if (path === '/preferences') {
+      if (method === 'PUT') currentPreferences = { ...currentPreferences, ...body, revision: currentPreferences.revision + 1 }
+      return response(currentPreferences)
+    }
+    if (path === '/phrases' && method === 'GET') return response([])
+    if (path === '/rules' && method === 'GET') return response(currentRules)
+    if (method === 'DELETE') { currentRules = currentRules.filter(rule => rule.id !== Number(path.split('/').at(-1))); return response(null, 204) }
+    if (method === 'POST' || method === 'PUT') {
+      const rule = { id: method === 'POST' ? nextId++ : Number(path.split('/').at(-1)), event_type: body.event_type, enabled: body.enabled, offset_minutes: body.amount * { minutes: 1, hours: 60, days: 1440 }[body.unit] }
+      currentRules = method === 'POST' ? [...currentRules, rule] : currentRules.map(item => item.id === rule.id ? rule : item)
+      return response(rule, method === 'POST' ? 201 : 200)
+    }
+    throw new Error('Unexpected request')
+  })
+  vi.stubGlobal('fetch', fetchMock)
+  saveSession({ token: 'test-session', user: { id: 7 } })
+  render(<MemoryRouter><NotificationPreferencesPage /></MemoryRouter>)
+  return fetchMock
+}
+const ready = () => screen.findByRole('button', { name: 'Guardar preferencias' })
+const region = type => within(screen.getByRole('region', { name: 'Recordatorios de ' + type }))
+afterEach(() => { vi.unstubAllGlobals(); clearSession() })
+
+describe('notification preferences screen', () => {
+  it('loads actual preferences and rules without writes or permission requests', async () => {
+    open({ rules: [{ id: 1, event_type: 'exam', offset_minutes: 60, enabled: true }] })
+    await ready()
+    expect(screen.getByLabelText('Horario predeterminado para exámenes')).toHaveValue('09:00')
+    expect(region('exámenes').getByRole('checkbox', { name: '1 hora antes' })).toBeChecked()
+    expect(screen.getByText(/Podés guardar tus preferencias y probar/)).toBeInTheDocument()
+    await waitFor(() => expect(fetch.mock.calls).toHaveLength(5))
+    expect(fetch.mock.calls.every(([url, options]) => (!options.method || String(url).endsWith('/preview')) && options.headers.Authorization === 'Bearer test-session')).toBe(true)
+  })
+  it('keeps the form unavailable when loading fails and retries without fake defaults', async () => {
+    let failing = true
+    open({ intercept: ({ path }) => path === '/preferences' && failing ? response({ message: 'Configuración no disponible' }, 503) : undefined })
+    expect(await screen.findByRole('alert')).toHaveTextContent('Configuración no disponible')
+    expect(screen.queryByRole('button', { name: 'Guardar preferencias' })).not.toBeInTheDocument()
+    failing = false
+    await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }))
+    await ready()
+  })
+  it('saves independent times, timezone, activation and coherent silence without server fields', async () => {
+    const user = userEvent.setup(), fetchMock = open()
+    await ready()
+    await user.click(screen.getByLabelText('Activar notificaciones'))
+    await user.click(screen.getByLabelText('Recibir avisos de exámenes'))
+    fireEvent.change(screen.getByLabelText('Horario predeterminado para exámenes'), { target: { value: '08:30' } })
+    fireEvent.change(screen.getByLabelText('Horario predeterminado para entregas'), { target: { value: '11:45' } })
+    fireEvent.change(screen.getByLabelText('Zona horaria'), { target: { value: 'Europe/Madrid' } })
+    await user.click(screen.getByLabelText('Activar horario de silencio'))
+    fireEvent.change(screen.getByLabelText('Inicio del silencio'), { target: { value: '22:00' } })
+    fireEvent.change(screen.getByLabelText('Fin del silencio'), { target: { value: '07:00' } })
+    await user.click(screen.getByRole('button', { name: 'Guardar preferencias' }))
+    await screen.findByText('Preferencias guardadas.')
+    const body = JSON.parse(fetchMock.mock.calls.find(([, opts]) => opts.method === 'PUT')[1].body)
+    expect(body).toEqual({ ...Object.fromEntries(Object.entries(defaults).filter(([key]) => !['revision', 'unfiltered_consented_at'].includes(key))), enabled: true, exams_enabled: true, timezone: 'Europe/Madrid', exam_default_time: '08:30', task_default_time: '11:45', quiet_hours_enabled: true, quiet_start: '22:00', quiet_end: '07:00' })
+  })
+  it('requires explicit unfiltered consent and restores formal when revoked', async () => {
+    const user = userEvent.setup(), fetchMock = open()
+    await ready()
+    expect(within(screen.getByLabelText('Estilo para exámenes')).getByRole('option', { name: 'Sin filtro' })).toBeDisabled()
+    await user.click(screen.getByLabelText('Acepto recibir mensajes sin filtro'))
+    await user.selectOptions(screen.getByLabelText('Estilo para exámenes'), 'unfiltered')
+    await user.click(screen.getByRole('button', { name: 'Guardar preferencias' }))
+    await screen.findByText('Preferencias guardadas.')
+    expect(JSON.parse(fetchMock.mock.calls.find(([, opts]) => opts.method === 'PUT')[1].body)).toEqual(expect.objectContaining({ unfiltered_enabled: true, exam_style: 'unfiltered' }))
+    await user.click(screen.getByLabelText('Acepto recibir mensajes sin filtro'))
+    expect(screen.getByLabelText('Estilo para exámenes')).toHaveValue('formal')
+    await user.click(screen.getByRole('button', { name: 'Guardar preferencias' }))
+    await screen.findByText('Preferencias guardadas.')
+    expect(JSON.parse(fetchMock.mock.calls.filter(([, opts]) => opts.method === 'PUT').at(-1)[1].body)).toEqual(expect.objectContaining({ unfiltered_enabled: false, exam_style: 'formal' }))
+  })
+  it('validates zone and silence before sending', async () => {
+    const fetchMock = open()
+    await ready()
+    fireEvent.change(screen.getByLabelText('Zona horaria'), { target: { value: 'Invalid/Zone' } })
+    fireEvent.submit(document.getElementById('notification-preferences-form'))
+    expect(await screen.findByRole('alert')).toHaveTextContent('zona horaria válida')
+    fireEvent.change(screen.getByLabelText('Zona horaria'), { target: { value: 'America/Argentina/Cordoba' } })
+    await userEvent.click(screen.getByLabelText('Activar horario de silencio'))
+    fireEvent.change(screen.getByLabelText('Inicio del silencio'), { target: { value: '22:00' } })
+    fireEvent.change(screen.getByLabelText('Fin del silencio'), { target: { value: '22:00' } })
+    fireEvent.submit(document.getElementById('notification-preferences-form'))
+    expect(await screen.findByRole('alert')).toHaveTextContent('diferentes')
+    expect(fetchMock.mock.calls.every(([url, opts]) => !opts.method || String(url).endsWith('/preview'))).toBe(true)
+  })
+  it('does not confirm saving early and preserves the draft after an error', async () => {
+    let rejectSave
+    open({ intercept: ({ method }) => method === 'PUT' ? new Promise((_, reject) => { rejectSave = reject }) : undefined })
+    await ready()
+    fireEvent.change(screen.getByLabelText('Horario predeterminado para exámenes'), { target: { value: '08:15' } })
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar preferencias' }))
+    expect(screen.getByRole('button', { name: 'Guardando…' })).toBeDisabled()
+    expect(screen.queryByText('Preferencias guardadas.')).not.toBeInTheDocument()
+    await act(async () => rejectSave(new Error('No hay conexión')))
+    expect(await screen.findByRole('alert')).toHaveTextContent('No hay conexión')
+    expect(screen.getByLabelText('Horario predeterminado para exámenes')).toHaveValue('08:15')
+  })
+  it('selects multiple presets independently and deselects directly', async () => {
+    const user = userEvent.setup(), fetchMock = open()
+    await ready()
+    const exams = region('exámenes'), tasks = region('entregas')
+    for (const label of ['7 días antes', '3 días antes', '1 día antes', '3 horas antes', '1 hora antes']) expect(exams.getByRole('checkbox', { name: label })).not.toBeChecked()
+    await user.click(exams.getByRole('checkbox', { name: '7 días antes' }))
+    await user.click(exams.getByRole('checkbox', { name: '3 horas antes' }))
+    expect(exams.getByText('2 de 5 recordatorios seleccionados')).toBeInTheDocument()
+    expect(tasks.getByRole('checkbox', { name: '7 días antes' })).not.toBeChecked()
+    await user.click(exams.getByRole('checkbox', { name: '7 días antes' }))
+    expect(exams.getByRole('checkbox', { name: '7 días antes' })).not.toBeChecked()
+    expect(exams.getByText('1 de 5 recordatorios seleccionados')).toBeInTheDocument()
+    expect(fetchMock.mock.calls.filter(([, opts]) => opts.method === 'DELETE')).toHaveLength(1)
+  })
+  it('counts custom selections, prevents duplicates and limits five', async () => {
+    const user = userEvent.setup(), fetchMock = open()
+    await ready()
+    const tasks = region('entregas')
+    await user.click(tasks.getByRole('checkbox', { name: '1 día antes' }))
+    await user.click(tasks.getByRole('button', { name: 'Agregar un horario personalizado' }))
+    fireEvent.change(tasks.getByLabelText('Cantidad para entregas'), { target: { value: '24' } })
+    await user.selectOptions(tasks.getByLabelText('Unidad para entregas'), 'hours')
+    await user.click(tasks.getByRole('button', { name: 'Guardar horario personalizado de entregas' }))
+    expect(tasks.getByRole('alert')).toHaveTextContent('Ya tenés')
+    fireEvent.change(tasks.getByLabelText('Cantidad para entregas'), { target: { value: '90' } })
+    await user.selectOptions(tasks.getByLabelText('Unidad para entregas'), 'minutes')
+    await user.click(tasks.getByRole('button', { name: 'Guardar horario personalizado de entregas' }))
+    expect(tasks.getByRole('checkbox', { name: '90 minutos antes' })).toBeChecked()
+    for (const name of ['7 días antes', '3 días antes', '3 horas antes']) await user.click(tasks.getByRole('checkbox', { name }))
+    expect(tasks.getByText('5 de 5 recordatorios seleccionados')).toBeInTheDocument()
+    expect(tasks.getByRole('checkbox', { name: '1 hora antes' })).toBeDisabled()
+    expect(tasks.getByRole('button', { name: 'Agregar un horario personalizado' })).toBeDisabled()
+    expect(fetchMock.mock.calls.filter(([url, opts]) => opts.method === 'POST' && String(url).endsWith('/rules'))).toHaveLength(5)
+    await user.click(tasks.getByRole('checkbox', { name: '3 días antes' }))
+    expect(tasks.getByRole('checkbox', { name: '1 hora antes' })).not.toBeDisabled()
+  })
+  it('retains inactive existing rules and edits custom times without losing preferences', async () => {
+    const user = userEvent.setup(), fetchMock = open({ rules: [{ id: 1, event_type: 'exam', offset_minutes: 60, enabled: false }, { id: 2, event_type: 'task', offset_minutes: 90, enabled: true }] })
+    await ready()
+    fireEvent.change(screen.getByLabelText('Horario predeterminado para exámenes'), { target: { value: '08:30' } })
+    expect(region('exámenes').getByRole('checkbox', { name: '1 hora antes' })).not.toBeChecked()
+    await user.click(region('exámenes').getByRole('checkbox', { name: '1 hora antes' }))
+    expect(fetchMock.mock.calls.filter(([url, opts]) => opts.method === 'POST' && String(url).endsWith('/rules'))).toHaveLength(0)
+    expect(JSON.parse(fetchMock.mock.calls.find(([, opts]) => opts.method === 'PUT')[1].body)).toEqual({ event_type: 'exam', amount: 60, unit: 'minutes', enabled: true })
+    await user.click(region('entregas').getByRole('button', { name: 'Editar 90 minutos antes de entregas' }))
+    fireEvent.change(region('entregas').getByLabelText('Cantidad para entregas'), { target: { value: '120' } })
+    await user.click(region('entregas').getByRole('button', { name: 'Guardar horario personalizado de entregas' }))
+    expect(region('entregas').getByRole('checkbox', { name: '2 horas antes' })).toBeChecked()
+    expect(screen.getByLabelText('Horario predeterminado para exámenes')).toHaveValue('08:30')
+  })
+  it('preserves five saved inactive rules and only frees capacity on explicit removal', async () => {
+    const user = userEvent.setup(), fetchMock = open({ rules: Array.from({ length: 5 }, (_, index) => ({ id: index + 1, event_type: 'exam', offset_minutes: (index + 1) * 60, enabled: false })) })
+    await ready()
+    const exams = region('exámenes')
+    expect(exams.getByText('0 de 5 recordatorios seleccionados')).toBeInTheDocument()
+    expect(exams.getByRole('checkbox', { name: '1 día antes' })).toBeDisabled()
+    expect(fetchMock.mock.calls.every(([url, options]) => !options.method || String(url).endsWith('/preview'))).toBe(true)
+    await user.click(exams.getByRole('checkbox', { name: '1 hora antes' }))
+    expect(exams.getByRole('checkbox', { name: '1 hora antes' })).toBeChecked()
+    expect(exams.getByRole('checkbox', { name: '1 día antes' })).toBeDisabled()
+    await user.click(exams.getByRole('button', { name: 'Quitar horario desactivado 2 horas antes de exámenes' }))
+    expect(exams.getByRole('checkbox', { name: '1 día antes' })).not.toBeDisabled()
+    expect(region('entregas').getByText('0 de 5 recordatorios seleccionados')).toBeInTheDocument()
+  })
+  it('keeps the confirmed selection intact on network errors', async () => {
+    const user = userEvent.setup()
+    open({ rules: [{ id: 1, event_type: 'task', offset_minutes: 60, enabled: true }], intercept: ({ method }) => ['DELETE', 'POST'].includes(method) ? response({ message: 'No hay conexión' }, 503) : undefined })
+    await ready()
+    await user.click(region('entregas').getByRole('checkbox', { name: '1 hora antes' }))
+    expect(region('entregas').getByRole('alert')).toHaveTextContent('No hay conexión')
+    expect(region('entregas').getByRole('checkbox', { name: '1 hora antes' })).toBeChecked()
+    await user.click(region('exámenes').getByRole('checkbox', { name: '1 día antes' }))
+    expect(region('exámenes').getByRole('checkbox', { name: '1 día antes' })).not.toBeChecked()
+  })
+  it('supports keyboard selection and does not confirm a pending request', async () => {
+    const user = userEvent.setup(); let finish
+    open({ intercept: ({ method }) => method === 'POST' ? new Promise(resolve => { finish = () => resolve(response({ id: 1, event_type: 'exam', offset_minutes: 60, enabled: true }, 201)) }) : undefined })
+    await ready()
+    const option = region('exámenes').getByRole('checkbox', { name: '1 hora antes' })
+    option.focus(); await user.keyboard(' ')
+    expect(option).not.toBeChecked(); expect(option).toBeDisabled()
+    await act(async () => finish())
+    expect(option).toBeChecked()
+    await user.keyboard('{Enter}')
+    await waitFor(() => expect(option).not.toBeChecked())
+  })
+})

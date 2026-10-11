@@ -7,8 +7,15 @@ const migrations = await loadMigrations()
 const history = migrations.map(({ name, checksum }) => ({ name, checksum }))
 const tables = [...new Set(['FokusMigrations', ...migrations.map((item) => item.table)])]
 const timeFields = rows => migrations.filter(item => item.kind === 'add_columns' && rows.some(row => row.name === item.name)).flatMap(item => Object.keys(item.columns()).map(Field => ({ Field, Type: 'time', Null: 'YES', Default: null })))
+const enumFields = rows => {
+  const item = migrations.find(m => m.kind === 'extend_enum')
+  const columns = rows.some(row => row.name === item.name) ? item.columns() : item.previousColumns()
+  return Object.entries(columns).map(([Field, column]) => ({ Field, Type: 'enum(' + column.type.values.map(value => "'" + value + "'").join(',') + ')', Null: 'NO', Default: 'formal' }))
+}
+const fieldsFor = (sql, rows) => sql.includes('notification_preferences') || sql.includes('NOTIFICATION_PREFERENCES') ? enumFields(rows) : timeFields(rows)
+
 const statusDb = (tableNames, rows = [], caseMode = 0) => ({
-  query: vi.fn(async (sql) => sql.includes('@@lower_case_table_names') ? [{ lower_case_table_names: caseMode }] : sql === 'SHOW TABLES' ? tableNames.map((name) => ({ table: name })) : sql.startsWith('SHOW COLUMNS') ? timeFields(rows) : rows),
+  query: vi.fn(async (sql) => sql.includes('@@lower_case_table_names') ? [{ lower_case_table_names: caseMode }] : sql === 'SHOW TABLES' ? tableNames.map((name) => ({ table: name })) : sql.startsWith('SHOW COLUMNS') ? fieldsFor(sql, rows) : rows),
 })
 
 const migrationDb = (tableNames = [], rows = [], acquired = 1, caseMode = 0) => {
@@ -17,7 +24,7 @@ const migrationDb = (tableNames = [], rows = [], acquired = 1, caseMode = 0) => 
     if (sql.includes('RELEASE_LOCK')) return [[{ released: 1 }]]
     if (sql.includes('@@lower_case_table_names')) return [[{ lower_case_table_names: caseMode }]]
     if (sql === 'SHOW TABLES') return [tableNames.map((name) => ({ table: name }))]
-    if (sql.startsWith('SHOW COLUMNS')) return [timeFields(rows)]
+    if (sql.startsWith('SHOW COLUMNS')) return [fieldsFor(sql, rows)]
     if (sql.startsWith('SELECT name')) return [rows]
     return [[]]
   })
@@ -39,7 +46,7 @@ describe('migraciones del esquema actual', () => {
     expect(migrationChecksum('changed\n', helper)).not.toBe(current)
   })
   it('reproduce todos los atributos físicos y relaciones de todos los modelos', () => {
-    expect(migrations).toHaveLength(12)
+    expect(migrations).toHaveLength(15)
     for (const item of migrations.filter(item => item.kind === 'create_table')) {
       const model = Object.values(sequelize.models).find((value) => value.tableName === item.table)
       const columns = item.columns()
@@ -47,7 +54,8 @@ describe('migraciones del esquema actual', () => {
       const added = migrations.filter(m => m.kind === 'add_columns' && m.table === item.table).flatMap(m => Object.keys(m.columns()))
       expect(Object.keys(columns).sort()).toEqual(Object.keys(physical).filter(name => !added.includes(name)).sort())
       for (const [name, column] of Object.entries(columns)) {
-        const attr = physical[name]
+        const altered = migrations.find(m => m.kind === 'extend_enum' && m.table === item.table && Object.hasOwn(m.columns(), name))
+        const attr = altered ? sequelize.normalizeAttribute(altered.previousColumns()[name]) : physical[name]
         const generator = sequelize.getQueryInterface().queryGenerator
         const options = { escape: generator.escape.bind(generator) }
         expect(sequelize.normalizeAttribute(column).type.toSql(options)).toBe(attr.type.toSql(options))
@@ -70,7 +78,7 @@ describe('migraciones del esquema actual', () => {
   })
   it('informa pendientes en una base vacía sin escribir', async () => {
     const db = statusDb([])
-    expect((await migrationStatus(db)).pending).toHaveLength(12)
+    expect((await migrationStatus(db)).pending).toHaveLength(15)
     expect(db.query).toHaveBeenCalledTimes(2)
     await expect(verifyMigrations(db)).rejects.toThrow('pendientes')
   })
@@ -125,9 +133,9 @@ describe('migraciones del esquema actual', () => {
     const { db, query } = migrationDb()
     await migrate(db)
     const writes = query.mock.calls.filter(([sql]) => /^(CREATE TABLE|ALTER TABLE|INSERT)/.test(sql))
-    expect(writes).toHaveLength(25)
+    expect(writes).toHaveLength(31)
     migrations.forEach((item, index) => {
-      expect(writes[index * 2 + 1][0]).toContain(`${item.kind === 'add_columns' ? 'ALTER TABLE' : 'CREATE TABLE'} \`${item.table}\``)
+      expect(writes[index * 2 + 1][0]).toContain(`${item.kind !== 'create_table' ? 'ALTER TABLE' : 'CREATE TABLE'} \`${item.table}\``)
       expect(writes[index * 2 + 2][1]).toEqual([item.name, item.checksum])
     })
     const ruleSql = writes.find(([sql]) => sql.startsWith('CREATE TABLE `notification_rules`'))[0]
@@ -135,6 +143,19 @@ describe('migraciones del esquema actual', () => {
     expect(ruleSql).not.toMatch(/`user_id`[^,]+UNIQUE|`event_type`[^,]+UNIQUE|`offset_minutes`[^,]+UNIQUE/)
     expect(query.mock.calls.at(-1)[0]).toContain('RELEASE_LOCK')
     expect(db.connectionManager.releaseConnection).toHaveBeenCalledOnce()
+  })
+  it('amplía enums sin borrar datos y rechaza modificaciones parciales', async () => {
+    const { db, query } = migrationDb()
+    await migrate(db)
+    const sql = query.mock.calls.find(([value]) => value.startsWith('ALTER TABLE `notification_preferences`'))[0]
+    expect(sql).toContain('MODIFY COLUMN `exam_style`')
+    expect(sql).toContain("'custom'")
+    expect(sql).not.toMatch(/DROP|TRUNCATE/)
+    const beforeEnum = history.slice(0, migrations.findIndex(item => item.kind === 'extend_enum'))
+    const partial = statusDb(tables.filter(table => table !== 'push_subscriptions'), beforeEnum)
+    const original = partial.query.getMockImplementation()
+    partial.query.mockImplementation(sql => sql.includes('SHOW COLUMNS FROM `notification_preferences`') ? enumFields(history) : original(sql))
+    await expect(verifyMigrations(partial)).rejects.toThrow('parcial')
   })
   it('no repite migraciones ya registradas', async () => {
     const { db, query } = migrationDb(tables, history)

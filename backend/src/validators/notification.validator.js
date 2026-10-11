@@ -28,3 +28,20 @@ export const ruleValidator = [
 ]
 export const ruleIdValidator = [param('id').isInt({ min: 1 })]
 export const ruleListValidator = [query('event_type').optional().isIn(['exam', 'task'])]
+
+export const phraseValidator = [
+  body().custom(value => value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).every(key => ['event_type', 'content'].includes(key))).withMessage('Enviá solamente el tipo de evento y la frase'),
+  body('event_type').isIn(['exam', 'task']).withMessage('Elegí examen o entrega'),
+  body('content').isString().withMessage('Escribí una frase').bail().trim().isLength({ min: 1, max: 240 }).withMessage('La frase debe tener entre 1 y 240 caracteres').bail()
+    .custom(value => !/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/u.test(value)).withMessage('La frase no puede incluir saltos de línea ni caracteres de control'),
+]
+
+export const previewValidator = [
+  body().custom(value => value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).every(key => ['event_type', 'style', 'unfiltered_consent', 'previous_phrase', 'selected_phrase'].includes(key))),
+  body('event_type').isIn(['exam', 'task']),
+  body('style').isIn(notificationStyles),
+  body('unfiltered_consent').custom(value => typeof value === 'boolean'),
+  body('selected_phrase').optional().isString().isLength({ min: 1, max: 240 }),
+  body('previous_phrase').optional().isString().isLength({ max: 240 }),
+  body().custom(value => value.style !== 'unfiltered' || value.unfiltered_consent === true).withMessage('Aceptá explícitamente el lenguaje fuerte para esta prueba'),
+]

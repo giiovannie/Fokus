@@ -20,10 +20,10 @@ export const loadMigrations = async () => {
   return Promise.all(names.map(async (name) => {
     const url = new URL(name, directory)
     const source = await readFile(url)
-    const { table, columns, kind = 'create_table' } = await import(url.href)
-    if (!['create_table', 'add_columns'].includes(kind)) throw new MigrationError('Tipo de migración desconocido')
+    const { table, columns, previousColumns, kind = 'create_table' } = await import(url.href)
+    if (!['create_table', 'add_columns', 'extend_enum'].includes(kind)) throw new MigrationError('Tipo de migración desconocido')
     const checksum = migrationChecksum(source, helper)
-    return { name, checksum, table, columns, kind }
+    return { name, checksum, table, columns, previousColumns, kind }
   }))
 }
 
@@ -68,6 +68,20 @@ const readState = async (query, migrations) => {
         throw new MigrationError('Las columnas de una migración aplicada no coinciden con el esquema esperado')
       }
     } else if (present.length) throw new MigrationError('Migración parcial de columnas sin historial válido')
+  }
+  for (const [index, item] of migrations.entries()) {
+    if (item.kind !== 'extend_enum') continue
+    const actualTable = findTable(item.table)
+    if (!actualTable) continue
+    const fields = await query(`SHOW COLUMNS FROM \`${actualTable.replaceAll('`', '``')}\``)
+    const expected = index < applied.length ? item.columns() : item.previousColumns()
+    for (const [name, column] of Object.entries(expected)) {
+      const field = fields.find(value => value.Field === name)
+      const enumType = 'enum(' + column.type.values.map(value => "'" + value + "'").join(',') + ')'
+      if (!field || field.Type.toLowerCase() !== enumType || field.Null !== 'NO' || field.Default !== column.defaultValue) {
+        throw new MigrationError('Los estilos de notificación no coinciden con el historial; revisar migración parcial')
+      }
+    }
   }
   return { applied, pending, tables, historyTable }
 }
@@ -118,10 +132,10 @@ export const migrate = async (sequelize) => {
     // MySQL DDL no permite rollback de todo el lote. Registrar cada tabla solo
     // después de crearla; cualquier fallo detiene el proceso sin eliminar datos.
     for (const item of state.pending) {
-      if (item.kind === 'add_columns') {
+      if (['add_columns', 'extend_enum'].includes(item.kind)) {
         const generator = sequelize.getQueryInterface().queryGenerator
         const definitions = Object.entries(item.columns()).map(([name, column]) =>
-          'ADD COLUMN ' + generator.quoteIdentifier(name) + ' ' + generator.attributeToSQL(sequelize.normalizeAttribute(column), { context: 'addColumn' }))
+          (item.kind === 'add_columns' ? 'ADD COLUMN ' : 'MODIFY COLUMN ') + generator.quoteIdentifier(name) + ' ' + generator.attributeToSQL(sequelize.normalizeAttribute(column), { context: 'addColumn' }))
         await query('ALTER TABLE ' + generator.quoteTable(item.table) + ' ' + definitions.join(', '))
       } else {
         await query(createTableSql(sequelize, item.table, item.columns()))

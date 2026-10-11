@@ -1,5 +1,5 @@
 import { UniqueConstraintError } from 'sequelize'
-import { NotificationPreference, NotificationRule, User, sequelize } from '../models/index.js'
+import { NotificationPreference, NotificationRule, NotificationPhrase, User, sequelize } from '../models/index.js'
 import { notificationDefaults, notificationPreferenceFields, maxRulesPerType } from '../config/notificationPreferences.js'
 import { pick } from '../utils/pick.js'
 import { createHttpError } from '../utils/httpError.js'
@@ -12,12 +12,12 @@ const serializePreferences = row => {
   return { ...result, revision: row?.revision || 1, unfiltered_consented_at: row?.unfiltered_consented_at || null }
 }
 const serializeRule = row => pick(row, ['id', 'event_type', 'offset_minutes', 'enabled'])
-const withUserLock = (userId, action) => sequelize.transaction(async transaction => {
+export const withUserLock = (userId, action) => sequelize.transaction(async transaction => {
   const user = await User.findByPk(userId, { transaction, lock: transaction.LOCK.UPDATE })
   if (!user) throw createHttpError(401, 'El usuario ya no existe')
   return action(transaction)
 })
-const bumpRevision = async (userId, transaction) => {
+export const bumpRevision = async (userId, transaction) => {
   const [preferences] = await NotificationPreference.findOrCreate({ where: { user_id: userId }, transaction })
   await preferences.increment('revision', { transaction })
 }
@@ -33,6 +33,11 @@ export const putNotificationPreferences = async (req, res, next) => {
     const saved = await withUserLock(req.user.id, async transaction => {
       const [row] = await NotificationPreference.findOrCreate({ where: { user_id: req.user.id }, transaction })
       const data = pick(req.body, notificationPreferenceFields)
+      for (const type of ['exam', 'task']) {
+        if (data[type + '_style'] === 'custom' && !await NotificationPhrase.findOne({ where: { user_id: req.user.id, event_type: type }, transaction })) {
+          throw createHttpError(400, 'Agregá al menos una frase propia para ese tipo de evento antes de elegir ese estilo')
+        }
+      }
       const changed = notificationPreferenceFields.some(key => serializePreferences(row)[key] !== data[key])
       if (!changed) return row
       data.unfiltered_consented_at = data.unfiltered_enabled

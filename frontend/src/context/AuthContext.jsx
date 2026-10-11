@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
+import { cleanupPushOnLogout } from '../services/pushNotifications.js'
 import { login } from '../services/auth.service.js'
 import { createUser } from '../services/users.service.js'
 import { clearSession, getSession, saveSession } from '../utils/authSession.js'
@@ -8,6 +9,7 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => getSession()?.user ?? null)
 
   const signIn = useCallback(async (credentials) => {
+    await cleanupPushOnLogout()
     const session = await login(credentials)
     saveSession(session)
     setUser(session.user)
@@ -19,7 +21,8 @@ export const AuthProvider = ({ children }) => {
     return signIn(credentials)
   }, [signIn])
 
-  const signOut = useCallback(() => {
+  const signOut = useCallback(async () => {
+    await cleanupPushOnLogout()
     clearSession()
     setUser(null)
   }, [])

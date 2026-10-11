@@ -1,50 +1,43 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../src/migrations/runner.js', () => ({ verifyMigrations: vi.fn() }))
-
+vi.mock('../src/migrations/runner.js', () => ({ verifyMigrations: vi.fn(), migrate: vi.fn() }))
 vi.mock('../src/models/index.js', () => ({
-  sequelize: {
-    authenticate: vi.fn(),
-    sync: vi.fn(),
-  },
+  sequelize: { authenticate: vi.fn(), sync: vi.fn() },
 }))
-
 const { sequelize } = await import('../src/models/index.js')
 const { initializeDatabase } = await import('../src/config/initializeDatabase.js')
-const { verifyMigrations } = await import('../src/migrations/runner.js')
+const { verifyMigrations, migrate } = await import('../src/migrations/runner.js')
+const modes = ['development', 'test', 'production', undefined]
+const setMode = mode => mode === undefined ? vi.stubEnv('NODE_ENV', undefined) : vi.stubEnv('NODE_ENV', mode)
 
 describe('initializeDatabase', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => vi.resetAllMocks())
   afterEach(() => vi.unstubAllEnvs())
 
-  it('valida la conexión antes de sincronizar los modelos sin opciones destructivas', async () => {
+  it.each(modes)('autentica y verifica el esquema sin escribir en modo %s', async mode => {
+    setMode(mode)
     await initializeDatabase()
-
     expect(sequelize.authenticate).toHaveBeenCalledOnce()
-    expect(sequelize.sync).toHaveBeenCalledOnce()
-    expect(sequelize.sync).toHaveBeenCalledWith()
-    expect(sequelize.authenticate.mock.invocationCallOrder[0]).toBeLessThan(sequelize.sync.mock.invocationCallOrder[0])
+    expect(verifyMigrations).toHaveBeenCalledExactlyOnceWith(sequelize)
+    expect(sequelize.authenticate.mock.invocationCallOrder[0]).toBeLessThan(verifyMigrations.mock.invocationCallOrder[0])
+    expect(sequelize.sync).not.toHaveBeenCalled()
+    expect(migrate).not.toHaveBeenCalled()
   })
 
-  it('no sincroniza si la conexión falla', async () => {
+  it('no verifica ni modifica el esquema cuando falla la conexión', async () => {
     sequelize.authenticate.mockRejectedValueOnce(new Error('connection failed'))
-
     await expect(initializeDatabase()).rejects.toThrow('connection failed')
+    expect(verifyMigrations).not.toHaveBeenCalled()
     expect(sequelize.sync).not.toHaveBeenCalled()
+    expect(migrate).not.toHaveBeenCalled()
   })
 
-  it('en producción verifica migraciones sin ejecutar sync', async () => {
-    vi.stubEnv('NODE_ENV', 'production')
-    await initializeDatabase()
-    expect(sequelize.authenticate).toHaveBeenCalledOnce()
-    expect(verifyMigrations).toHaveBeenCalledWith(sequelize)
+  it.each(modes)('rechaza el arranque sin ejecutar migraciones pendientes en modo %s', async mode => {
+    setMode(mode)
+    const failure = new Error('Hay migraciones pendientes; ejecutarlas manualmente antes del despliegue')
+    verifyMigrations.mockRejectedValueOnce(failure)
+    await expect(initializeDatabase()).rejects.toBe(failure)
     expect(sequelize.sync).not.toHaveBeenCalled()
-  })
-
-  it('rechaza el arranque en producción si el esquema no está preparado', async () => {
-    vi.stubEnv('NODE_ENV', 'production')
-    verifyMigrations.mockRejectedValueOnce(new Error('migraciones pendientes'))
-    await expect(initializeDatabase()).rejects.toThrow('migraciones pendientes')
-    expect(sequelize.sync).not.toHaveBeenCalled()
+    expect(migrate).not.toHaveBeenCalled()
   })
 })

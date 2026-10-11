@@ -23,9 +23,11 @@ Rotar el archivo cuando Aiven renueve la CA. La conexión TLS real fue verificad
 desde desarrollo; el montaje del archivo y la conexión desde Render quedan
 pendientes de validar en staging.
 
-En desarrollo DB_SSL puede quedar en false y se conserva `sequelize.sync()`
-sin force ni alter. En producción solo se autentica la conexión y se verifica
-el historial; nunca se ejecutan sync ni migraciones al iniciar el servidor.
+En desarrollo DB_SSL puede quedar en false. En todos los entornos el arranque
+solo autentica la conexión y verifica el historial de migraciones mediante consultas
+de lectura; nunca ejecuta sync ni migraciones ni crea o altera tablas. Si el esquema
+no está preparado, el servidor informa el error y no abre el puerto HTTP.
+Las migraciones se aplican por separado, mediante una operación manual autorizada.
 
 ## Esquema versionado
 

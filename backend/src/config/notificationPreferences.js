@@ -5,7 +5,7 @@ export const notificationDefaults = Object.freeze({
   exam_style: 'formal', task_style: 'formal', unfiltered_enabled: false,
   quiet_hours_enabled: false, quiet_start: null, quiet_end: null,
 })
-export const notificationStyles = ['formal', 'friendly', 'motivating', 'sarcastic', 'unfiltered']
+export const notificationStyles = ['formal', 'friendly', 'motivating', 'sarcastic', 'unfiltered', 'custom']
 export const maxRulesPerType = 5
 export const maxOffsetMinutes = 30 * 24 * 60
 export const notificationPreferenceFields = Object.keys(notificationDefaults)

@@ -3,11 +3,7 @@ import { verifyMigrations } from '../migrations/runner.js'
 
 export const initializeDatabase = async () => {
   await sequelize.authenticate()
-  if (process.env.NODE_ENV === 'production') {
-    await verifyMigrations(sequelize)
-  } else {
-    await sequelize.sync()
-  }
+  await verifyMigrations(sequelize)
 }
 
 export const closeDatabase = async () => sequelize.close()

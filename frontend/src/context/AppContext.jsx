@@ -98,16 +98,36 @@ export const AppProvider = ({ children }) => {
     return () => window.clearTimeout(timer)
   }, [loadData])
 
-  const runMutation = useCallback(async (request, applyResult) => {
+  const refreshNotifications = useCallback(async () => {
+    try {
+      const notifications = await getNotifications()
+      setData(current => ({ ...current, notifications: applyNotificationReadState(notifications, user?.id) }))
+    } catch {
+      notify('No pudimos actualizar las notificaciones. Recargá la página para reintentarlo.', 'warning')
+    }
+  }, [notify, user?.id])
+
+  const runMutation = useCallback(async (request, applyResult, collection) => {
     try {
       const result = await request()
       setData((current) => applyResult(current, result))
+      if (['subjects', 'tasks', 'exams', 'activities'].includes(collection)) {
+        try {
+          const notifications = await getNotifications()
+          setData((current) => ({
+            ...current,
+            notifications: applyNotificationReadState(notifications, user?.id),
+          }))
+        } catch {
+          notify('El cambio se guardó, pero no pudimos actualizar las notificaciones. Recargá la página para reintentarlo.', 'warning')
+        }
+      }
       return true
     } catch (requestError) {
       notify(requestError.message, 'danger')
       return false
     }
-  }, [notify])
+  }, [notify, user?.id])
 
   const addItem = useCallback((collection, item) => {
     const requests = {
@@ -124,7 +144,7 @@ export const AppProvider = ({ children }) => {
     return runMutation(request, (current, created) => ({
       ...current,
       [collection]: [...current[collection], collection === 'subjects' ? normalizeSubject(created) : created],
-    }))
+    }), collection)
   }, [runMutation])
 
   const updateItem = useCallback((collection, id, changes) => {
@@ -154,7 +174,7 @@ export const AppProvider = ({ children }) => {
     return runMutation(request, (current, updated) => ({
       ...current,
       [collection]: replaceItem(current[collection], id, collection === 'subjects' ? normalizeSubject(updated) : updated),
-    }))
+    }), collection)
   }, [runMutation, user?.id])
 
   const removeItem = useCallback((collection, id) => {
@@ -185,7 +205,7 @@ export const AppProvider = ({ children }) => {
       }
 
       return nextData
-    })
+    }, collection)
   }, [runMutation])
 
   const updateProfile = useCallback((profile) => {
@@ -219,13 +239,14 @@ export const AppProvider = ({ children }) => {
     error,
     setError,
     retry: loadData,
+    refreshNotifications,
     notify,
     addItem,
     updateItem,
     removeItem,
     updateProfile,
     uploadProfileImage,
-  }), [data, toast, isLoading, error, loadData, notify, addItem, updateItem, removeItem, updateProfile, uploadProfileImage])
+  }), [data, toast, isLoading, error, loadData, refreshNotifications, notify, addItem, updateItem, removeItem, updateProfile, uploadProfileImage])
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
 }

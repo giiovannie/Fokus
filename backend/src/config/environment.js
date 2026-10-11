@@ -1,3 +1,4 @@
+import { getPushConfiguration } from './webPush.js'
 import { isIP } from 'node:net'
 
 export class EnvironmentError extends Error {
@@ -71,6 +72,7 @@ export const validateEnvironment = (env = process.env) => {
     if (!/^\d+$/.test(env.CLOUDINARY_API_KEY)) fail('CLOUDINARY_API_KEY')
   }
 
+  try { getPushConfiguration(env) } catch { fail('VAPID') }
   getCorsOrigins(env)
   return { nodeEnv: mode, port: Number(env.PORT) || 3000 }
 }

@@ -1,5 +1,7 @@
+import { PushSubscription } from './PushSubscription.js'
 import { sequelize } from '../config/database.js'
 import { NotificationPreference } from './NotificationPreference.js'
+import { NotificationPhrase } from './NotificationPhrase.js'
 import { NotificationRule } from './NotificationRule.js'
 import { Exam } from './Exam.js'
 import { Profile } from './Profile.js'
@@ -36,4 +38,10 @@ NotificationPreference.belongsTo(User, { foreignKey: 'user_id', as: 'user' })
 User.hasMany(NotificationRule, { foreignKey: 'user_id', as: 'notification_rules', onDelete: 'CASCADE' })
 NotificationRule.belongsTo(User, { foreignKey: 'user_id', as: 'user' })
 
-export { NotificationPreference, NotificationRule, Exam, Profile, sequelize, StudyActivity, Subject, Task, TaskNote, Teacher, User }
+User.hasMany(NotificationPhrase, { foreignKey: 'user_id', as: 'notification_phrases', onDelete: 'CASCADE' })
+NotificationPhrase.belongsTo(User, { foreignKey: 'user_id', as: 'user' })
+
+User.hasMany(PushSubscription, { foreignKey: 'user_id', as: 'push_subscriptions', onDelete: 'CASCADE' })
+PushSubscription.belongsTo(User, { foreignKey: 'user_id', as: 'user' })
+
+export { PushSubscription, NotificationPhrase, NotificationPreference, NotificationRule, Exam, Profile, sequelize, StudyActivity, Subject, Task, TaskNote, Teacher, User }

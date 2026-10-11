@@ -87,3 +87,19 @@ Pruebas de migración usan conexiones simuladas, sin escribir en Aiven.
 Siguiente: motor temporal con pruebas DST/silencio/cancelación; suscripciones por dispositivo;
 cola e historial con deduplicación y reintentos; ejecución programada; interfaz de preferencias.
 Revisar políticas de recuperación tras caídas al diseñar el planificador.
+
+
+## Frases propias y prueba local (etapa siguiente implementada)
+
+Se agrega estilo custom, hasta diez frases total por estudiante separadas por tipo,
+y vista previa autenticada sin escrituras. Las catorce migraciones de estas etapas
+ya fueron aplicadas exclusivamente en la base local con autorización anterior. Detalles: NOTIFICATION-PERSONALIZATION.md y API-CONTRACT.md.
+La prueba del sistema requiere permiso y no equivale a Web Push con Fokus cerrada.
+
+
+## Transporte manual Web Push
+
+Suscripciones por dispositivo y prueba remota implementadas; migración15 preparada,
+pendiente de autorización local. Preferencias y reglas no disparan avisos automáticos.
+Se mantienen defaults, límites cinco/30días, consentimiento, silencio y cancelaciones
+ya confirmados para el futuro motor. Ver WEB-PUSH-TRANSPORT.md para API y prueba real.

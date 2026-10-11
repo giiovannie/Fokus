@@ -1105,7 +1105,7 @@ PUT /api/notifications/preferences reemplaza los campos siguientes (todos obliga
 ```
 
 Respuesta 200: esos campos más revision y unfiltered_consented_at (UTC o null).
-Estilos: formal, friendly, motivating, sarcastic, unfiltered; visibles en español.
+Estilos: formal, friendly, motivating, sarcastic, unfiltered, custom; visibles en español.
 Sin filtro requiere unfiltered_enabled=true explícito; consentimiento registrado por
 el servidor. Revocación exige elegir estilos distintos de unfiltered.
 Zona IANA editable; horas HH:mm. Silencio activo exige inicio y fin diferentes;
@@ -1140,3 +1140,73 @@ Cambios efectivos de preferencias/reglas incrementan revision; replanificar solo
 pendientes, sin reenviar entregados. Eventos editados se releen antes del envío.
 La cola de entregas, cancelación persistente y deduplicación de envíos pertenecen
 a la siguiente etapa, no a estos endpoints de configuración.
+
+
+## Frases propias y vista previa local
+
+Sexto estilo `custom` (Mis propias frases), independiente para examen/entrega.
+Se exige al menos una frase propia del tipo al guardar ese estilo. Las cinco
+personalidades originales se conservan; `unfiltered` sigue exigiendo consentimiento.
+
+Todas estas rutas requieren JWT Bearer y usan exclusivamente `req.user.id`:
+
+- GET `/api/notifications/phrases`: lista propia, filtro opcional `event_type=exam|task`.
+- POST `/api/notifications/phrases`: 201; cuerpo `{ "event_type": "exam", "content": "Mi frase" }`.
+- PUT `/api/notifications/phrases/:id`: 200; mismo cuerpo completo.
+- DELETE `/api/notifications/phrases/:id`: 204.
+
+Respuesta de frase: `{ id, event_type, content }`. Máximo **10 frases total por usuario**
+entre ambos tipos, con escrituras serializadas por bloqueo de la fila del usuario.
+Texto plano recortado, 1–240 caracteres; vacío, saltos de línea, controles y controles
+bidireccionales se rechazan. Se permite lenguaje coloquial. No interpretar HTML.
+No aceptar `user_id` ni otros campos. Duplicado por usuario/tipo/contenido: 409
+(la unicidad en MySQL también respeta su collation). Límite: 409; ajena/inexistente:404;
+JWT:401; validación:400. Cambios efectivos incrementan `revision`.
+Si el estilo guardado es custom, no se puede eliminar o cambiar de tipo su última
+frase:409; elegir primero otro estilo. No se pierde la selección silenciosamente.
+
+POST `/api/notifications/preview` es de **solo lectura**, aunque usa POST para el cuerpo:
+
+```json
+{ "event_type": "exam", "style": "formal", "unfiltered_consent": false }
+```
+
+`previous_phrase` es opcional (texto de hasta 240 caracteres); permite elegir otra
+frase cuando hay alternativas. Respuesta 200: `{ title, body, phrase }`.
+Usa un evento claramente ficticio para mañana en la zona y horario predeterminado
+**guardados** del estudiante, sin crear eventos. Custom usa solo sus frases del tipo;
+sin frases:400. Sin filtro exige `unfiltered_consent=true` explícito para esa prueba,
+sin modificar ni registrar consentimiento o preferencias guardadas.
+
+GET `/api/notifications` conserva formato `{ id, type, message, read }`, pertenencia
+y ventana de próximos siete días, sin depender de la activación Push. Exámenes y
+entregas usan ahora la personalidad guardada, alternando variantes en la lista.
+Fokus siempre agrega título del evento, materia, fecha DATEONLY, hora efectiva y zona.
+Hora explícita prevalece sobre horario guardado; custom sin frases o sin filtro sin
+consentimiento usa formal como protección. Actividades de estudio conservan su texto.
+
+El botón de prueba muestra exactamente `title`/`body` de la vista previa, con ícono
+Fokus. La prueba local no usa transporte remoto. El transporte Web Push manual se define abajo; todavía no hay cola ni registros de entrega.
+
+
+## Web Push manual por dispositivo
+
+Contrato detallado en [WEB-PUSH-TRANSPORT.md](WEB-PUSH-TRANSPORT.md).
+Todas las rutas JWT bajo `/api/notifications/push`:
+
+- GET `/config`: `{ enabled, public_key }`, solo clave pública.
+- GET `/subscriptions`: metadata de dispositivos propios, nunca endpoints/claves.
+- POST `/subscriptions`: UUIDv4 `device_id`, `device_label` opcional y `subscription`
+  estándar `{ endpoint, keys: { p256dh, auth }, expirationTime? }`. Alta/renovación200.
+- DELETE `/subscriptions/:id`: propia204; ajena/inexistente404.
+- POST `/test/:id`: cuerpo de preview con `selected_phrase` opcional validada;
+  destino propio,202 aceptación de proveedor. Sin filtro exige consentimiento explícito.
+
+Máximo10 dispositivos por usuario; unicidad usuario/dispositivo y endpoint hash global.
+HTTPS/proveedores y curva de claves validados. Rechazar user_id/campos desconocidos.
+400 inválida,401 JWT,404 ajena,409 duplicado/límite,410 vencida y eliminada,429 pruebas
+excesivas,503 VAPID no configurado/proveedor falló. No revelar errores del proveedor.
+`selected_phrase` también es opcional en preview (1–240 caracteres y debe pertenecer
+al estilo o al usuario/tipo). Preserva exactamente la frase visible al probar envío.
+Ninguna prueba modifica preferencias ni crea recordatorios/eventos/registros de entrega.
+No implementa aún planificador, reintentos ni envío automático de próximos eventos.
