@@ -15,6 +15,7 @@ const ProfilePage = () => {
   const [isSaving, setIsSaving] = useState(false)
   const [feedback, setFeedback] = useState(null)
   const fileInput = useRef(null)
+  const creatingProfile = useRef(!data.profile.id)
 
   useEffect(() => () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl)
@@ -50,6 +51,7 @@ const ProfilePage = () => {
         const message = saved.message ?? 'Perfil actualizado.'
         setFeedback({ error: false, message })
         notify(message, saved.message ? 'warning' : 'success')
+        if (creatingProfile.current) navigate('/', { replace: true })
       } else {
         setFeedback({ error: true, message: 'No se pudo completar el guardado. Tu foto anterior se conserva; podés volver a intentarlo.' })
       }
