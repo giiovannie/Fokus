@@ -70,14 +70,15 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   if (event.notification.data?.test !== true && event.notification.data?.source !== 'fokus') return
+  const destination = event.notification.data?.test === true ? '/notifications/preferences' : '/notifications'
   event.notification.close()
   event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async windows => {
     for (const client of windows) {
       if (new URL(client.url).origin !== self.location.origin) continue
       await client.focus()
-      if ('navigate' in client) await client.navigate('/notifications/preferences')
+      if ('navigate' in client) await client.navigate(destination)
       return
     }
-    return self.clients.openWindow('/notifications/preferences')
+    return self.clients.openWindow(destination)
   }))
 })

@@ -46,7 +46,7 @@ describe('migraciones del esquema actual', () => {
     expect(migrationChecksum('changed\n', helper)).not.toBe(current)
   })
   it('reproduce todos los atributos físicos y relaciones de todos los modelos', () => {
-    expect(migrations).toHaveLength(15)
+    expect(migrations).toHaveLength(18)
     for (const item of migrations.filter(item => item.kind === 'create_table')) {
       const model = Object.values(sequelize.models).find((value) => value.tableName === item.table)
       const columns = item.columns()
@@ -68,17 +68,18 @@ describe('migraciones del esquema actual', () => {
         expect(column.onDelete).toBe(attr.onDelete)
         expect(column.onUpdate).toBe(attr.onUpdate)
       }
-      const sql = createTableSql(sequelize, item.table, columns)
+      const sql = createTableSql(sequelize, item.table, columns, item.indexes)
       expect(sql).toContain('ENGINE=InnoDB')
       expect(sql).not.toContain('IF NOT EXISTS')
       expect(sql).not.toMatch(/DROP|TRUNCATE/)
+      for (const index of item.indexes) expect(sql).toContain('KEY `' + index.name + '` (' + index.fields.map(field => '`' + field + '`').join(', ') + ')')
       if (item.table === 'users') expect(sql).toMatch(/`email`[^,]+UNIQUE/)
       if (item.table === 'profiles') expect(sql).toMatch(/`user_id`[^,]+UNIQUE/)
     }
   })
   it('informa pendientes en una base vacía sin escribir', async () => {
     const db = statusDb([])
-    expect((await migrationStatus(db)).pending).toHaveLength(15)
+    expect((await migrationStatus(db)).pending).toHaveLength(18)
     expect(db.query).toHaveBeenCalledTimes(2)
     await expect(verifyMigrations(db)).rejects.toThrow('pendientes')
   })
@@ -133,7 +134,7 @@ describe('migraciones del esquema actual', () => {
     const { db, query } = migrationDb()
     await migrate(db)
     const writes = query.mock.calls.filter(([sql]) => /^(CREATE TABLE|ALTER TABLE|INSERT)/.test(sql))
-    expect(writes).toHaveLength(31)
+    expect(writes).toHaveLength(37)
     migrations.forEach((item, index) => {
       expect(writes[index * 2 + 1][0]).toContain(`${item.kind !== 'create_table' ? 'ALTER TABLE' : 'CREATE TABLE'} \`${item.table}\``)
       expect(writes[index * 2 + 2][1]).toEqual([item.name, item.checksum])
@@ -152,7 +153,7 @@ describe('migraciones del esquema actual', () => {
     expect(sql).toContain("'custom'")
     expect(sql).not.toMatch(/DROP|TRUNCATE/)
     const beforeEnum = history.slice(0, migrations.findIndex(item => item.kind === 'extend_enum'))
-    const partial = statusDb(tables.filter(table => table !== 'push_subscriptions'), beforeEnum)
+    const partial = statusDb(tables.filter(table => !['push_subscriptions', 'notification_reminders', 'notification_deliveries', 'notification_worker_state'].includes(table)), beforeEnum)
     const original = partial.query.getMockImplementation()
     partial.query.mockImplementation(sql => sql.includes('SHOW COLUMNS FROM `notification_preferences`') ? enumFields(history) : original(sql))
     await expect(verifyMigrations(partial)).rejects.toThrow('parcial')

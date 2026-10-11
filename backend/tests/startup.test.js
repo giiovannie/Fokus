@@ -7,7 +7,8 @@ const { initializeDatabase, closeDatabase, listen } = vi.hoisted(() => ({ initia
 vi.mock('../src/config/initializeDatabase.js', () => ({ initializeDatabase, closeDatabase }))
 vi.mock('../src/app.js', () => ({ app: { listen } }))
 
-afterEach(() => {
+const originalArgv = process.argv
+afterEach(() => { process.argv = originalArgv;
   process.exitCode = 0
   vi.unstubAllEnvs()
   vi.restoreAllMocks()
@@ -56,4 +57,16 @@ it('cierra la conexión y no escucha cuando falla la verificación de migracione
   expect(listen).not.toHaveBeenCalled()
   expect(process.exitCode).toBe(1)
   expect(log).toHaveBeenCalledWith('Hay migraciones pendientes')
+})
+
+it('arranca en contingencia y fuerza el motor apagado aunque el entorno lo habilite', async () => {
+  process.argv = [...process.argv, '--disable-reminders']
+  for (const [name, value] of Object.entries({ NODE_ENV: 'test', DB_NAME: 'test_db', DB_USER: 'test_user', JWT_SECRET: 'test-only-secret', NOTIFICATION_WORKER_ENABLED: 'true' })) vi.stubEnv(name, value)
+  const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+  listen.mockReturnValue({ once: (event, callback) => { if (event === 'listening') queueMicrotask(callback) } })
+  await import('../app.js')
+  await vi.waitFor(() => expect(listen).toHaveBeenCalled())
+  expect(initializeDatabase).toHaveBeenCalledOnce()
+  expect(process.env.NOTIFICATION_WORKER_ENABLED).toBe('false')
+  expect(log).toHaveBeenCalledWith('Modo de contingencia: recordatorios automáticos deshabilitados.')
 })

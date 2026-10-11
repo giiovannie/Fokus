@@ -1,3 +1,4 @@
+import { notificationWorkerRouter } from './notificationWorker.routes.js'
 import { Router } from 'express'
 import { getHealth } from '../controllers/health.controller.js'
 import { authRouter } from './auth.routes.js'
@@ -14,6 +15,7 @@ import { userRouter } from './user.routes.js'
 
 const router = Router()
 router.get('/health', getHealth)
+router.use('/internal', notificationWorkerRouter)
 
 router.use('/auth', authRouter)
 router.use('/dashboard', dashboardRouter)

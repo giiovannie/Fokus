@@ -1,3 +1,6 @@
+import { NotificationReminder } from './NotificationReminder.js'
+import { NotificationDelivery } from './NotificationDelivery.js'
+import { NotificationWorkerState } from './NotificationWorkerState.js'
 import { PushSubscription } from './PushSubscription.js'
 import { sequelize } from '../config/database.js'
 import { NotificationPreference } from './NotificationPreference.js'
@@ -44,4 +47,11 @@ NotificationPhrase.belongsTo(User, { foreignKey: 'user_id', as: 'user' })
 User.hasMany(PushSubscription, { foreignKey: 'user_id', as: 'push_subscriptions', onDelete: 'CASCADE' })
 PushSubscription.belongsTo(User, { foreignKey: 'user_id', as: 'user' })
 
-export { PushSubscription, NotificationPhrase, NotificationPreference, NotificationRule, Exam, Profile, sequelize, StudyActivity, Subject, Task, TaskNote, Teacher, User }
+User.hasMany(NotificationReminder, { foreignKey: 'user_id', as: 'notification_reminders', onDelete: 'CASCADE' })
+NotificationReminder.belongsTo(User, { foreignKey: 'user_id', as: 'user' })
+NotificationReminder.hasMany(NotificationDelivery, { foreignKey: 'reminder_id', as: 'deliveries', onDelete: 'CASCADE' })
+NotificationDelivery.belongsTo(NotificationReminder, { foreignKey: 'reminder_id', as: 'reminder' })
+PushSubscription.hasMany(NotificationDelivery, { foreignKey: 'subscription_id', as: 'notification_deliveries', onDelete: 'SET NULL' })
+NotificationDelivery.belongsTo(PushSubscription, { foreignKey: 'subscription_id', as: 'subscription', onDelete: 'SET NULL' })
+
+export { NotificationReminder, NotificationDelivery, NotificationWorkerState, PushSubscription, NotificationPhrase, NotificationPreference, NotificationRule, Exam, Profile, sequelize, StudyActivity, Subject, Task, TaskNote, Teacher, User }

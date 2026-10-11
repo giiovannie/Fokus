@@ -1,3 +1,4 @@
+import { validateWorkerEnvironment } from './reminderWorker.js'
 import { getPushConfiguration } from './webPush.js'
 import { isIP } from 'node:net'
 
@@ -72,6 +73,7 @@ export const validateEnvironment = (env = process.env) => {
     if (!/^\d+$/.test(env.CLOUDINARY_API_KEY)) fail('CLOUDINARY_API_KEY')
   }
 
+  if (!validateWorkerEnvironment(env)) fail('NOTIFICATION_WORKER')
   try { getPushConfiguration(env) } catch { fail('VAPID') }
   getCorsOrigins(env)
   return { nodeEnv: mode, port: Number(env.PORT) || 3000 }

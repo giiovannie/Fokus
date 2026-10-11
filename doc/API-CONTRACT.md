@@ -1210,3 +1210,7 @@ excesivas,503 VAPID no configurado/proveedor falló. No revelar errores del prov
 al estilo o al usuario/tipo). Preserva exactamente la frase visible al probar envío.
 Ninguna prueba modifica preferencias ni crea recordatorios/eventos/registros de entrega.
 No implementa aún planificador, reintentos ni envío automático de próximos eventos.
+
+## Procesamiento interno de recordatorios (preparado, deshabilitado)
+
+`POST /api/internal/notifications/process` acepta únicamente cuerpo vacío/`{}` y autenticación Bearer de servicio mediante `NOTIFICATION_SERVICE_TOKEN`; el JWT estudiantil no autoriza esta operación. Requiere habilitación explícita `NOTIFICATION_WORKER_ENABLED=true`, VAPID y migraciones vigentes. Responde contadores agregados o `{ "skipped": "busy" }`; errores 401 (servicio no autorizado), 400 (parámetros no admitidos), 429 (límite), 503 (deshabilitado/configuración). No permite elegir usuarios ni modificar el tamaño del lote. Véase `WEB-PUSH-REMINDERS.md`.

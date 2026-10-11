@@ -20,10 +20,10 @@ export const loadMigrations = async () => {
   return Promise.all(names.map(async (name) => {
     const url = new URL(name, directory)
     const source = await readFile(url)
-    const { table, columns, previousColumns, kind = 'create_table' } = await import(url.href)
+    const { table, columns, previousColumns, indexes = [], kind = 'create_table' } = await import(url.href)
     if (!['create_table', 'add_columns', 'extend_enum'].includes(kind)) throw new MigrationError('Tipo de migración desconocido')
     const checksum = migrationChecksum(source, helper)
-    return { name, checksum, table, columns, previousColumns, kind }
+    return { name, checksum, table, columns, previousColumns, indexes, kind }
   }))
 }
 
@@ -97,7 +97,7 @@ export const verifyMigrations = async (sequelize) => {
   return state
 }
 
-export const createTableSql = (sequelize, table, columns) => {
+export const createTableSql = (sequelize, table, columns, indexes = []) => {
   const generator = sequelize.getQueryInterface().queryGenerator
   const normalized = Object.fromEntries(Object.entries(columns).map(([name, column]) => [name, sequelize.normalizeAttribute(column)]))
   const attributes = generator.attributesToSQL(normalized, { table, context: 'createTable' })
@@ -111,6 +111,11 @@ export const createTableSql = (sequelize, table, columns) => {
   }
   const uniques = [...groups].map(([name, fields]) => 'UNIQUE KEY ' + generator.quoteIdentifier(name) +
     ' (' + fields.map(field => generator.quoteIdentifier(field)).join(', ') + ')')
+  const extraIndexes = indexes.map(index => {
+    if (!/^[a-z_]+$/.test(index.name) || !index.fields.length || index.fields.some(field => !Object.hasOwn(columns, field))) throw new MigrationError('Índice de migración inválido')
+    return 'KEY ' + generator.quoteIdentifier(index.name) + ' (' + index.fields.map(field => generator.quoteIdentifier(field)).join(', ') + ')'
+  })
+  uniques.push(...extraIndexes)
   return uniques.length ? sql.replace(/\) ENGINE=/, ', ' + uniques.join(', ') + ') ENGINE=') : sql
 }
 
@@ -138,7 +143,7 @@ export const migrate = async (sequelize) => {
           (item.kind === 'add_columns' ? 'ADD COLUMN ' : 'MODIFY COLUMN ') + generator.quoteIdentifier(name) + ' ' + generator.attributeToSQL(sequelize.normalizeAttribute(column), { context: 'addColumn' }))
         await query('ALTER TABLE ' + generator.quoteTable(item.table) + ' ' + definitions.join(', '))
       } else {
-        await query(createTableSql(sequelize, item.table, item.columns()))
+        await query(createTableSql(sequelize, item.table, item.columns(), item.indexes))
       }
       await query(`INSERT INTO \`${metadataTable}\` (name, checksum) VALUES (?, ?)`, [item.name, item.checksum])
     }

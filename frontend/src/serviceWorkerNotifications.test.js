@@ -2,12 +2,12 @@ import { readFileSync } from 'node:fs'
 import { runInNewContext } from 'node:vm'
 import { describe, expect, it, vi } from 'vitest'
 const source = readFileSync('public/sw.js', 'utf8')
-const click = async (windows, test = true) => {
+const click = async (windows, test = true, notificationSource) => {
   const handlers = {}
   const clients = { matchAll: vi.fn().mockResolvedValue(windows), openWindow: vi.fn() }
   runInNewContext(source, { self: { addEventListener: (name, handler) => { handlers[name] = handler }, clients, location: { origin: 'https://fokus.example.test' } }, URL })
   let pending
-  const event = { notification: { data: { test }, close: vi.fn() }, waitUntil: promise => { pending = promise } }
+  const event = { notification: { data: { test, source: notificationSource }, close: vi.fn() }, waitUntil: promise => { pending = promise } }
   handlers.notificationclick(event)
   await pending
   return { clients, event, handlers }
@@ -49,4 +49,9 @@ describe('recepción remota con Fokus sin ventanas abiertas', () => {
       expect(show).toHaveBeenCalledWith('Fokus', expect.objectContaining({ body: expect.stringContaining('Recibiste una notificación') }))
     }
   })
+})
+
+it('abre Notificaciones para recordatorios reales sin aceptar URLs externas', async () => {
+  const result = await click([], false, 'fokus')
+  expect(result.clients.openWindow).toHaveBeenCalledWith('/notifications')
 })

@@ -6,13 +6,16 @@
   "scripts": {
     "dev": "nodemon app.js",
     "start": "node app.js",
+    "start:contingency": "node app.js --disable-reminders",
     "db:migrate": "node scripts/migrate.js up",
     "db:migrate:status": "node scripts/migrate.js status",
     "db:migrate:verify": "node scripts/migrate.js verify",
     "test": "vitest run --passWithNoTests",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "notifications:process": "node scripts/process-reminders.js"
   },
   "dependencies": {
+    "@js-temporal/polyfill": "^0.5.1",
     "bcryptjs": "^3.0.2",
     "cloudinary": "^2.11.0",
     "cookie-parser": "^1.4.7",

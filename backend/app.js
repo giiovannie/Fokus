@@ -1,4 +1,7 @@
 import 'dotenv/config'
+import { applyReminderStartupMode, isReminderContingencyMode } from './src/config/reminderWorker.js'
+
+applyReminderStartupMode()
 import { EnvironmentError, validateEnvironment } from './src/config/environment.js'
 import { MigrationError } from './src/migrations/runner.js'
 import { formatStartupError, registerShutdown } from './src/config/serverLifecycle.js'
@@ -24,6 +27,7 @@ const startServer = async () => {
       server.once('error', reject)
     })
     console.log(`Servidor iniciado en el puerto ${port}`)
+    if (isReminderContingencyMode()) console.log('Modo de contingencia: recordatorios automáticos deshabilitados.')
   } catch (error) {
     console.error(error instanceof EnvironmentError || error instanceof MigrationError ? error.message : formatStartupError(error, { stage, port }))
     process.exitCode = 1

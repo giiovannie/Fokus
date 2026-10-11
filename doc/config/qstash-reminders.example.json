@@ -1,0 +1,20 @@
+{
+  "status": "prepared-only-not-created",
+  "provider": "Upstash QStash Free",
+  "destination": "https://fokus-backend-7p38.onrender.com/api/internal/notifications/process",
+  "scheduleId": "fokus-reminders-production",
+  "createScheduleHeaders": {
+    "Authorization": "Bearer ${QSTASH_TOKEN}",
+    "Content-Type": "application/json",
+    "Upstash-Cron": "*/2 * * * *",
+    "Upstash-Schedule-Id": "fokus-reminders-production",
+    "Upstash-Method": "POST",
+    "Upstash-Timeout": "120s",
+    "Upstash-Retries": "0",
+    "Upstash-Forward-Authorization": "Bearer ${NOTIFICATION_SERVICE_TOKEN}",
+    "Upstash-Redact-Fields": "header[Authorization]",
+    "Upstash-Label": "fokus-reminders-production"
+  },
+  "body": {},
+  "notes": "Plantilla de preparación; no es una petición ejecutable ni un formato para importar directamente. La creación real de un schedule puede activarlo inmediatamente: no realizarla hasta autorizar producción."
+}
