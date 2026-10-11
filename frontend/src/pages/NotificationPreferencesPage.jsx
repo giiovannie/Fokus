@@ -10,8 +10,6 @@ import { getNotificationPhrases, getNotificationPreferences, getNotificationRule
 import { notificationStyles, preferenceError, preferencesPayload } from '../utils/notificationPreferences.js'
 
 const NotificationPreferencesPage = () => {
-  const [pushSubscriptionId, setPushSubscriptionId] = useState(null)
-  const [pushRevision, setPushRevision] = useState(0)
   const [form, setForm] = useState(null)
   const [rules, setRules] = useState([])
   const [phrases, setPhrases] = useState([])
@@ -86,8 +84,8 @@ const NotificationPreferencesPage = () => {
       </form>
       <div className="row g-4 mt-1">{[['exam', 'exámenes'], ['task', 'entregas']].map(([type, label]) => <div key={type} className="col-12 col-lg-6"><div className="card border-0 h-100"><div className="card-body p-4"><h2 className="h5">Recordatorios de {label}</h2><NotificationRulesEditor type={type} label={label} rules={rules.filter(rule => rule.event_type === type)} onChange={setRules} disabled={saving} /><p className="small text-secondary mt-3 mb-0">Para recibirlos, guardá la activación general y la de {label}.</p></div></div></div>)}</div>
       <NotificationPhrasesEditor phrases={phrases} onChange={setPhrases} disabled={saving} />
-      <WebPushControls onChange={setPushSubscriptionId} revision={pushRevision} />
-      <NotificationTester phrases={phrases} preferences={form} pushSubscriptionId={pushSubscriptionId} onPushExpired={() => setPushRevision(value => value + 1)} />
+      <WebPushControls />
+      <NotificationTester phrases={phrases} preferences={form} />
     </>}
   </>
 }

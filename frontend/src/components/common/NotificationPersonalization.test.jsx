@@ -78,28 +78,14 @@ describe('personalización y pruebas desde preferencias', () => {
   })
 })
 
-describe('prueba Web Push desde Express', () => {
-  it('requiere destino propio y envía exactamente la frase de la vista previa', async () => {
-    sendPushTest.mockResolvedValue({ message: 'El servicio Push aceptó la prueba.' })
-    const props = { phrases: [], preferences }
-    const { rerender } = render(<NotificationTester {...props} />)
-    expect(screen.getByRole('button', { name: 'Enviar prueba desde Express' })).toBeDisabled()
-    rerender(<NotificationTester {...props} pushSubscriptionId={12} />)
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Enviar prueba desde Express' })).toBeEnabled())
-    await userEvent.click(screen.getByRole('button', { name: 'Enviar prueba desde Express' }))
-    expect(sendPushTest).toHaveBeenCalledWith(12, { event_type: 'exam', style: 'formal', unfiltered_consent: false, selected_phrase: 'Le recordamos su próximo examen' })
-    expect(sendLocalNotification).not.toHaveBeenCalled()
-    expect(await screen.findByRole('status')).toHaveTextContent('aceptó la prueba')
-  })
-  it('informa vencimientos sin perder la vista previa ni modificar preferencias', async () => {
-    const onPushExpired = vi.fn()
-    sendPushTest.mockRejectedValue(Object.assign(new Error('La suscripción venció'), { status: 410 }))
-    render(<NotificationTester phrases={[]} preferences={preferences} pushSubscriptionId={12} onPushExpired={onPushExpired} />)
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Enviar prueba desde Express' })).toBeEnabled())
-    await userEvent.click(screen.getByRole('button', { name: 'Enviar prueba desde Express' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('venció')
-    expect(onPushExpired).toHaveBeenCalledOnce()
-    expect(screen.getByLabelText('Vista previa de notificación')).toHaveTextContent('Le recordamos')
-    expect(createNotificationPhrase).not.toHaveBeenCalled()
+describe('interfaz de prueba simplificada', () => {
+  it('conserva la prueba local sin ofrecer envíos desde Express', async () => {
+    render(<NotificationTester phrases={[]} preferences={preferences} />)
+    const button = await screen.findByRole('button', { name: 'Enviar notificación de prueba' })
+    await waitFor(() => expect(button).toBeEnabled())
+    expect(screen.queryByRole('button', { name: /Express/ })).not.toBeInTheDocument()
+    await userEvent.click(button)
+    expect(sendLocalNotification).toHaveBeenCalledOnce()
+    expect(sendPushTest).not.toHaveBeenCalled()
   })
 })
