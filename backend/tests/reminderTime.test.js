@@ -74,3 +74,7 @@ describe('silencio basado en intervalos reales', () => {
     expect(iso(postponeSilence(Date.parse('2026-03-08T06:00Z'), saved))).toBe('2026-03-08T07:00:00.000Z')
   })
 })
+
+it('no calcula vencimientos para tareas sin fecha aunque haya reglas activas', () => {
+  expect(calculateReminders({ event: { due_date: null, status: 'pending', due_time: '09:00' }, eventType: 'task', preferences, rules: [rule(60, 'task')] })).toEqual([])
+})

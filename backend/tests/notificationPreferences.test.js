@@ -117,8 +117,34 @@ describe('notification preferences and rules', () => {
     expect((await send({ [date]: '2026-10-20' })).status).toBe(201)
     expect((await send({ [date]: '2026-02-30' })).status).toBe(400)
     expect((await send({ [date]: '2026-10-20T09:00:00Z' })).status).toBe(400)
-    expect((await send({})).status).toBe(400)
-    expect(create).toHaveBeenCalledTimes(1)
+    expect((await send({})).status).toBe(path === 'tasks' ? 201 : 400)
+    expect(create).toHaveBeenCalledTimes(path === 'tasks' ? 2 : 1)
   })
 
+})
+
+describe('tareas sin fecha de entrega', () => {
+  it.each([undefined, null])('crea una tarea con fecha %s sin hora de vencimiento', async due_date => {
+    vi.spyOn(Subject, 'findOne').mockResolvedValue({ id: 1 })
+    const create = vi.spyOn(Task, 'create').mockImplementation(async values => ({ id: 1, ...values }))
+    const result = await auth(request(app).post('/api/tasks')).send({ title: 'Sin vencimiento', subject_id: 1, due_date, due_time: '09:00' })
+    expect(result.status).toBe(201)
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ due_date: null, due_time: null }))
+  })
+  it('elimina la fecha y hora de una tarea propia sin cambiar otros campos', async () => {
+    const update = vi.fn(async () => {})
+    vi.spyOn(Task, 'findOne').mockResolvedValue({ id: 1, due_date: '2026-10-12', update })
+    expect((await auth(request(app).put('/api/tasks/1')).send({ due_date: null })).status).toBe(200)
+    expect(update).toHaveBeenCalledWith({ due_date: null, due_time: null })
+  })
+  it('rechaza fecha vacía o inválida y mantiene pertenencia', async () => {
+    const create = vi.spyOn(Task, 'create')
+    for (const due_date of ['', '2026-02-30']) {
+      expect((await auth(request(app).post('/api/tasks')).send({ title: 'Tarea', subject_id: 1, due_date })).status).toBe(400)
+    }
+    expect(create).not.toHaveBeenCalled()
+    vi.spyOn(Subject, 'findOne').mockResolvedValue(null)
+    expect((await auth(request(app).post('/api/tasks')).send({ title: 'Tarea', subject_id: 99, due_date: null })).status).toBe(400)
+    expect(create).not.toHaveBeenCalled()
+  })
 })

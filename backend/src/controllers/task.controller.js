@@ -53,7 +53,9 @@ export const getTask = async (req, res, next) => {
 export const createTask = async (req, res, next) => {
   try {
     await findOwnedSubject(req.body.subject_id, req.user.id)
-    const task = await Task.create(pick(req.body, ['title', 'description', 'due_date', 'due_time', 'subject_id']))
+    const values = pick(req.body, ['title', 'description', 'due_date', 'due_time', 'subject_id'])
+    if (values.due_date == null) { values.due_date = null; values.due_time = null }
+    const task = await Task.create(values)
     return res.status(201).json(taskAttributes.reduce((data, key) => ({ ...data, [key]: task[key] }), {}))
   } catch (error) {
     return next(error)
@@ -64,7 +66,9 @@ export const updateTask = async (req, res, next) => {
   try {
     const task = await findOwnedTask(req.params.id, req.user.id)
     if (req.body.subject_id) await findOwnedSubject(req.body.subject_id, req.user.id)
-    await task.update(pick(req.body, ['title', 'description', 'due_date', 'due_time', 'subject_id']))
+    const values = pick(req.body, ['title', 'description', 'due_date', 'due_time', 'subject_id'])
+    if (values.due_date === null || (values.due_date === undefined && task.due_date === null)) values.due_time = null
+    await task.update(values)
     return res.json(taskAttributes.reduce((data, key) => ({ ...data, [key]: task[key] }), {}))
   } catch (error) {
     return next(error)

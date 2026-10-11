@@ -21,7 +21,7 @@ export const loadMigrations = async () => {
     const url = new URL(name, directory)
     const source = await readFile(url)
     const { table, columns, previousColumns, indexes = [], kind = 'create_table' } = await import(url.href)
-    if (!['create_table', 'add_columns', 'extend_enum'].includes(kind)) throw new MigrationError('Tipo de migración desconocido')
+    if (!['create_table', 'add_columns', 'extend_enum', 'relax_nullability'].includes(kind)) throw new MigrationError('Tipo de migración desconocido')
     const checksum = migrationChecksum(source, helper)
     return { name, checksum, table, columns, previousColumns, indexes, kind }
   }))
@@ -83,6 +83,22 @@ const readState = async (query, migrations) => {
       }
     }
   }
+  for (const [index, item] of migrations.entries()) {
+    if (item.kind !== 'relax_nullability') continue
+    const actualTable = findTable(item.table)
+    if (!actualTable) continue
+    const fields = await query(`SHOW COLUMNS FROM \`${actualTable.replaceAll('`', '``')}\``)
+    for (const [name, column] of Object.entries(item.columns())) {
+      const previous = item.previousColumns()[name]
+      if (column.type.key !== 'DATEONLY' || column.allowNull !== true || previous?.allowNull !== false) {
+        throw new MigrationError('Cambio de nulabilidad no permitido')
+      }
+      const field = fields.find(value => value.Field === name)
+      if (!field || field.Type.toLowerCase() !== 'date' || field.Default !== null || field.Null !== (index < applied.length ? 'YES' : 'NO')) {
+        throw new MigrationError('Nulabilidad incompatible o migración parcial; detener el despliegue')
+      }
+    }
+  }
   return { applied, pending, tables, historyTable }
 }
 
@@ -137,7 +153,7 @@ export const migrate = async (sequelize) => {
     // MySQL DDL no permite rollback de todo el lote. Registrar cada tabla solo
     // después de crearla; cualquier fallo detiene el proceso sin eliminar datos.
     for (const item of state.pending) {
-      if (['add_columns', 'extend_enum'].includes(item.kind)) {
+      if (['add_columns', 'extend_enum', 'relax_nullability'].includes(item.kind)) {
         const generator = sequelize.getQueryInterface().queryGenerator
         const definitions = Object.entries(item.columns()).map(([name, column]) =>
           (item.kind === 'add_columns' ? 'ADD COLUMN ' : 'MODIFY COLUMN ') + generator.quoteIdentifier(name) + ' ' + generator.attributeToSQL(sequelize.normalizeAttribute(column), { context: 'addColumn' }))

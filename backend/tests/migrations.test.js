@@ -12,7 +12,10 @@ const enumFields = rows => {
   const columns = rows.some(row => row.name === item.name) ? item.columns() : item.previousColumns()
   return Object.entries(columns).map(([Field, column]) => ({ Field, Type: 'enum(' + column.type.values.map(value => "'" + value + "'").join(',') + ')', Null: 'NO', Default: 'formal' }))
 }
-const fieldsFor = (sql, rows) => sql.includes('notification_preferences') || sql.includes('NOTIFICATION_PREFERENCES') ? enumFields(rows) : timeFields(rows)
+const fieldsFor = (sql, rows) => sql.includes('notification_preferences') || sql.includes('NOTIFICATION_PREFERENCES') ? enumFields(rows) : [
+  ...timeFields(rows),
+  ...(/`tasks`/i.test(sql) ? [{ Field: 'due_date', Type: 'date', Null: rows.some(row => row.name === migrations.at(-1).name) ? 'YES' : 'NO', Default: null }] : []),
+]
 
 const statusDb = (tableNames, rows = [], caseMode = 0) => ({
   query: vi.fn(async (sql) => sql.includes('@@lower_case_table_names') ? [{ lower_case_table_names: caseMode }] : sql === 'SHOW TABLES' ? tableNames.map((name) => ({ table: name })) : sql.startsWith('SHOW COLUMNS') ? fieldsFor(sql, rows) : rows),
@@ -46,7 +49,7 @@ describe('migraciones del esquema actual', () => {
     expect(migrationChecksum('changed\n', helper)).not.toBe(current)
   })
   it('reproduce todos los atributos físicos y relaciones de todos los modelos', () => {
-    expect(migrations).toHaveLength(18)
+    expect(migrations).toHaveLength(19)
     for (const item of migrations.filter(item => item.kind === 'create_table')) {
       const model = Object.values(sequelize.models).find((value) => value.tableName === item.table)
       const columns = item.columns()
@@ -54,7 +57,7 @@ describe('migraciones del esquema actual', () => {
       const added = migrations.filter(m => m.kind === 'add_columns' && m.table === item.table).flatMap(m => Object.keys(m.columns()))
       expect(Object.keys(columns).sort()).toEqual(Object.keys(physical).filter(name => !added.includes(name)).sort())
       for (const [name, column] of Object.entries(columns)) {
-        const altered = migrations.find(m => m.kind === 'extend_enum' && m.table === item.table && Object.hasOwn(m.columns(), name))
+        const altered = migrations.find(m => ['extend_enum', 'relax_nullability'].includes(m.kind) && m.table === item.table && Object.hasOwn(m.columns(), name))
         const attr = altered ? sequelize.normalizeAttribute(altered.previousColumns()[name]) : physical[name]
         const generator = sequelize.getQueryInterface().queryGenerator
         const options = { escape: generator.escape.bind(generator) }
@@ -79,7 +82,7 @@ describe('migraciones del esquema actual', () => {
   })
   it('informa pendientes en una base vacía sin escribir', async () => {
     const db = statusDb([])
-    expect((await migrationStatus(db)).pending).toHaveLength(18)
+    expect((await migrationStatus(db)).pending).toHaveLength(19)
     expect(db.query).toHaveBeenCalledTimes(2)
     await expect(verifyMigrations(db)).rejects.toThrow('pendientes')
   })
@@ -134,7 +137,7 @@ describe('migraciones del esquema actual', () => {
     const { db, query } = migrationDb()
     await migrate(db)
     const writes = query.mock.calls.filter(([sql]) => /^(CREATE TABLE|ALTER TABLE|INSERT)/.test(sql))
-    expect(writes).toHaveLength(37)
+    expect(writes).toHaveLength(1 + migrations.length * 2)
     migrations.forEach((item, index) => {
       expect(writes[index * 2 + 1][0]).toContain(`${item.kind !== 'create_table' ? 'ALTER TABLE' : 'CREATE TABLE'} \`${item.table}\``)
       expect(writes[index * 2 + 2][1]).toEqual([item.name, item.checksum])
@@ -186,4 +189,19 @@ describe('migraciones del esquema actual', () => {
     expect(query.mock.calls.some(([sql]) => /DROP|TRUNCATE/.test(sql))).toBe(false)
     expect(query.mock.calls.at(-1)[0]).toContain('RELEASE_LOCK')
   })
+})
+
+it('relaja únicamente la fecha sin borrar datos y detecta un ALTER parcial', async () => {
+  const prior = history.slice(0, -1)
+  const { db, query } = migrationDb(tables, prior)
+  await migrate(db)
+  const writes = query.mock.calls.filter(([sql]) => /^(CREATE|ALTER|INSERT)/.test(sql))
+  expect(writes).toHaveLength(2)
+  expect(writes[0][0]).toContain('ALTER TABLE `tasks` MODIFY COLUMN `due_date` DATE DEFAULT NULL')
+  expect(writes[0][0]).not.toMatch(/NOT NULL|DROP|DELETE|TRUNCATE/)
+  expect(writes[1][1]).toEqual([migrations.at(-1).name, migrations.at(-1).checksum])
+  const partial = statusDb(tables, prior)
+  const original = partial.query.getMockImplementation()
+  partial.query.mockImplementation(sql => sql === 'SHOW COLUMNS FROM `tasks`' ? fieldsFor(sql, history) : original(sql))
+  await expect(migrationStatus(partial)).rejects.toThrow('parcial')
 })

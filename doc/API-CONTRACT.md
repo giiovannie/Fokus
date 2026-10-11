@@ -1128,7 +1128,7 @@ Las escrituras se serializan por usuario para no superar el límite concurrentem
 ## Hora del evento y cálculo
 
 Agregar exam_time a exámenes y due_time a tareas, opcionales HH:mm o null.
-Fecha YYYY-MM-DD obligatoria en creación; omitir hora conserva compatibilidad.
+Fecha YYYY-MM-DD obligatoria en exámenes. En tareas, due_date puede omitirse o ser null para indicar «Sin fecha de entrega»; una cadena vacía no es válida. Omitir due_date al actualizar conserva la fecha, y null la elimina y limpia due_time. Las tareas sin fecha no generan recordatorios de vencimiento. Omitir hora conserva compatibilidad.
 En actualización, omitir conserva y null elimina. Persistencia TIME HH:mm:00.
 Hora explícita prevalece sobre fallback del tipo. Fecha/hora se interpretan en zona
 del estudiante; duración se resta en minutos transcurridos y los instantes usan UTC.

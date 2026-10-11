@@ -6,7 +6,7 @@ const Task = sequelize.define('Task', {
   title: { type: DataTypes.STRING(180), allowNull: false },
   description: { type: DataTypes.TEXT },
   due_time: { type: DataTypes.TIME, allowNull: true, defaultValue: null, get() { return this.getDataValue('due_time')?.slice(0, 5) ?? null } },
-  due_date: { type: DataTypes.DATEONLY, allowNull: false },
+  due_date: { type: DataTypes.DATEONLY, allowNull: true, defaultValue: null },
   status: {
     type: DataTypes.ENUM('pending', 'in_progress', 'completed'),
     allowNull: false,

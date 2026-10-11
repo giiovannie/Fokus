@@ -30,6 +30,7 @@ export const postponeSilence = (instant, preferences) => {
 }
 export const eventHasExpired = (type, eventAt, now) => type === 'exam' ? eventAt <= now : eventAt < now
 export const calculateReminders = ({ event, eventType, preferences: saved, rules }) => {
+  if (eventType === 'task' && !event.due_date) return []
   const preferences = { ...notificationDefaults, ...saved }
   if (!preferences.enabled || !preferences[eventType === 'exam' ? 'exams_enabled' : 'tasks_enabled'] || (eventType === 'task' && event.status === 'completed')) return []
   const ownRules = rules.filter(rule => rule.event_type === eventType)
