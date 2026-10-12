@@ -10,7 +10,7 @@ describe('prueba local de notificaciones', () => {
     const serviceWorker = { getRegistration: vi.fn().mockResolvedValue(registration) }
     await sendLocalNotification(message, { notification, serviceWorker, secure: true })
     expect(notification.requestPermission).toHaveBeenCalledOnce()
-    expect(showNotification).toHaveBeenCalledWith(message.title, expect.objectContaining({ body: message.body, icon: '/icons/fokus-192.png', data: { test: true, url: '/notifications/preferences' } }))
+    expect(showNotification).toHaveBeenCalledWith(message.title, expect.objectContaining({ body: message.body, icon: '/icons/fokus-192.png', badge: '/icons/fokus-badge.png', data: { test: true, url: '/notifications/preferences' } }))
   })
   it('permite repetir pruebas sin solicitar permiso nuevamente', async () => {
     const notification = { permission: 'granted', requestPermission: vi.fn() }

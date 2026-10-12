@@ -41,7 +41,7 @@ describe('recepción remota con Fokus sin ventanas abiertas', () => {
   }
   it('muestra el mensaje de Express con ícono, marca de prueba y tag de deduplicación', async () => {
     const show = await receive({ json: () => ({ title: 'Fokus · Prueba', body: '[PRUEBA] Mi frase\nMateria: Matemática.', id: 'abc-123', data: { test: true, url: 'https://evil.test' } }) })
-    expect(show).toHaveBeenCalledWith('Fokus · Prueba', { body: '[PRUEBA] Mi frase\nMateria: Matemática.', icon: '/icons/fokus-192.png', badge: '/icons/fokus-192.png', tag: 'fokus-push-abc-123', data: { source: 'fokus', test: true } })
+    expect(show).toHaveBeenCalledWith('Fokus · Prueba', { body: '[PRUEBA] Mi frase\nMateria: Matemática.', icon: '/icons/fokus-192.png', badge: '/icons/fokus-badge.png', tag: 'fokus-push-abc-123', data: { source: 'fokus', test: true } })
   })
   it('muestra un aviso seguro cuando no hay datos o el JSON es inválido', async () => {
     for (const data of [null, { json: () => { throw new Error('Inválido') } }, { json: () => ({ title: 3, body: {} }) }]) {
@@ -54,4 +54,14 @@ describe('recepción remota con Fokus sin ventanas abiertas', () => {
 it('abre Notificaciones para recordatorios reales sin aceptar URLs externas', async () => {
   const result = await click([], false, 'fokus')
   expect(result.clients.openWindow).toHaveBeenCalledWith('/notifications')
+})
+
+it('precarga el badge nuevo para notificaciones sin ventana abierta', async () => {
+  const handlers = {}, addAll = vi.fn().mockResolvedValue(undefined)
+  const caches = { open: vi.fn().mockResolvedValue({ addAll }) }
+  runInNewContext(source, { self: { addEventListener: (name, handler) => { handlers[name] = handler }, skipWaiting: vi.fn() }, caches, URL })
+  let pending
+  handlers.install({ waitUntil: promise => { pending = promise } })
+  await pending
+  expect(addAll).toHaveBeenCalledWith(expect.arrayContaining(['/icons/fokus-badge.png']))
 })

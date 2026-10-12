@@ -17,9 +17,31 @@
     <link rel="icon" href="/icons/fokus-192.png" />
     <link rel="apple-touch-icon" href="/icons/fokus-192.png" />
     <title>Fokus | Organizador académico</title>
+    <!-- Visible antes de descargar React; su primer render reemplaza este contenido. -->
+    <style>
+      html { background: #F8FAFC; color: #1E293B; }
+      html[data-bs-theme="dark"] { background: #0F172A; color: #E2E8F0; }
+      body { margin: 0; }
+      .boot-splash { min-height: 100svh; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.25rem; padding: 1.5rem; font-family: system-ui, sans-serif; text-align: center; }
+      .boot-owl { width: 5rem; height: 5rem; object-fit: contain; animation: boot-hello 900ms ease-out, boot-breathe 1.8s 900ms ease-in-out infinite; transform-origin: center bottom; }
+      .boot-message { margin: 0; font-size: 0.9375rem; }
+      .boot-dots { display: inline-flex; gap: 0.25rem; margin-left: 0.375rem; }
+      .boot-dots span { width: 0.25rem; height: 0.25rem; border-radius: 50%; background: #0D9488; animation: boot-dot 1.2s ease-in-out infinite; }
+      .boot-dots span:nth-child(2) { animation-delay: 150ms; }
+      .boot-dots span:nth-child(3) { animation-delay: 300ms; }
+      @keyframes boot-hello { 0% { opacity: 0; transform: translateY(6px) rotate(-7deg); } 60% { opacity: 1; transform: rotate(5deg); } 100% { opacity: 1; transform: none; } }
+      @keyframes boot-breathe { 50% { transform: translateY(-3px) rotate(3deg); } }
+      @keyframes boot-dot { 50% { opacity: 0.35; transform: translateY(-2px); } }
+      @media (prefers-reduced-motion: reduce) { .boot-owl, .boot-dots span { animation: none; transform: none; } }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <main class="boot-splash" role="status" aria-live="polite" aria-label="Cargando Fokus">
+        <img class="boot-owl" src="/icons/fokus-logo.png" alt="" fetchpriority="high" />
+        <p class="boot-message">Preparando todo...<span class="boot-dots" aria-hidden="true"><span></span><span></span><span></span></span></p>
+      </main>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

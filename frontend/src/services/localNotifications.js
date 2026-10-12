@@ -9,7 +9,7 @@ export const sendLocalNotification = async (message, {
   let permission = notification.permission
   if (permission === 'default') permission = await notification.requestPermission()
   if (permission !== 'granted') throw new Error('Las notificaciones están bloqueadas. Permitilas en la configuración del sitio de Chrome y volvé a probar.')
-  const options = { body: message.body, icon: '/icons/fokus-192.png', badge: '/icons/fokus-192.png', data: { test: true, url: '/notifications/preferences' } }
+  const options = { body: message.body, icon: '/icons/fokus-192.png', badge: '/icons/fokus-badge.png', data: { test: true, url: '/notifications/preferences' } }
   try {
     const registration = await serviceWorker?.getRegistration?.()
     if (registration?.active && typeof registration.showNotification === 'function') {

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fokus-shell-v3'
+const CACHE_NAME = 'fokus-shell-v4'
 const APP_SHELL = [
   '/',
   '/index.html',
@@ -6,6 +6,7 @@ const APP_SHELL = [
   '/icons/fokus-logo.png',
   '/icons/fokus-192.png',
   '/icons/fokus-512.png',
+  '/icons/fokus-badge.png',
 ]
 
 self.addEventListener('install', (event) => {
@@ -62,7 +63,7 @@ self.addEventListener('push', (event) => {
   const title = valid ? payload.title.slice(0, 120) : 'Fokus'
   const body = valid ? payload.body.slice(0, 2000) : 'Recibiste una notificación de Fokus. Abrí la aplicación para verla.'
   event.waitUntil(self.registration.showNotification(title, {
-    body, icon: '/icons/fokus-192.png', badge: '/icons/fokus-192.png',
+    body, icon: '/icons/fokus-192.png', badge: '/icons/fokus-badge.png',
     ...(typeof payload?.id === 'string' && /^[a-zA-Z0-9-]{1,64}$/.test(payload.id) ? { tag: 'fokus-push-' + payload.id } : {}),
     data: { source: 'fokus', test: payload?.data?.test === true },
   }))
