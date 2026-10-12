@@ -1,16 +1,23 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { cleanupPushOnLogout } from '../services/pushNotifications.js'
 import { login } from '../services/auth.service.js'
 import { createUser } from '../services/users.service.js'
-import { clearSession, getSession, saveSession } from '../utils/authSession.js'
+import { clearSession, getSession, saveSession, SESSION_EXPIRED_EVENT, SESSION_EXPIRED_MESSAGE } from '../utils/authSession.js'
 import { AuthContext } from './auth-context.js'
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => getSession()?.user ?? null)
+  const [sessionMessage, setSessionMessage] = useState('')
+  useEffect(() => {
+    const onExpired = () => { setUser(null); setSessionMessage(SESSION_EXPIRED_MESSAGE) }
+    window.addEventListener(SESSION_EXPIRED_EVENT, onExpired)
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired)
+  }, [])
 
   const signIn = useCallback(async (credentials) => {
     await cleanupPushOnLogout()
     const session = await login(credentials)
+    setSessionMessage('')
     saveSession(session)
     setUser(session.user)
     return session.user
@@ -23,11 +30,12 @@ export const AuthProvider = ({ children }) => {
 
   const signOut = useCallback(async () => {
     await cleanupPushOnLogout()
+    setSessionMessage('')
     clearSession()
     setUser(null)
   }, [])
 
-  const value = useMemo(() => ({ user, signIn, signUp, signOut }), [user, signIn, signUp, signOut])
+  const value = useMemo(() => ({ user, sessionMessage, signIn, signUp, signOut }), [user, sessionMessage, signIn, signUp, signOut])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

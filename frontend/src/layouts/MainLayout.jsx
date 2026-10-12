@@ -34,7 +34,7 @@ const MainLayout = () => {
         <Topbar onMenu={() => setMenuOpen(true)} />
         <main className="p-3 p-md-4 p-xl-5" id="main-content" tabIndex="-1">
           <div className="content-container">
-            {isLoading ? <LoadingState message="Preparando tu espacio académico…" /> : error ? <ErrorState message={error} onRetry={retry} /> : <Outlet />}
+            {isLoading ? <LoadingState message="Preparando todo..." /> : error ? <ErrorState message={error} onRetry={retry} /> : <Outlet />}
           </div>
         </main>
       </div>

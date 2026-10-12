@@ -95,7 +95,7 @@ export const AppProvider = ({ children }) => {
 
   useEffect(() => {
     const timer = window.setTimeout(loadData, 0)
-    return () => window.clearTimeout(timer)
+    return () => { window.clearTimeout(timer); loadId.current += 1 }
   }, [loadData])
 
   const refreshNotifications = useCallback(async () => {

@@ -1,4 +1,4 @@
-import { getAccessToken } from '../utils/authSession.js'
+import { expireSession, getAccessToken, SESSION_EXPIRED_MESSAGE } from '../utils/authSession.js'
 
 export const API_URL = import.meta.env.VITE_API_URL ?? ''
 
@@ -24,6 +24,9 @@ export const apiRequest = async (path, options = {}) => {
   const data = response.status === 204 ? null : await response.json().catch(() => null)
 
   if (!response.ok) {
+    if (response.status === 401 && path !== '/auth/login' && path !== '/users' && expireSession(token)) {
+      throw new ApiError(SESSION_EXPIRED_MESSAGE, 401)
+    }
     throw new ApiError(data?.message ?? 'No se pudo completar la solicitud.', response.status)
   }
 

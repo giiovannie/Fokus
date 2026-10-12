@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { clearSession, saveSession } from '../utils/authSession.js'
+import { clearSession, getSession, saveSession } from '../utils/authSession.js'
 import { ApiError, apiRequest } from './api.js'
 
 describe('apiRequest', () => {
@@ -50,4 +50,40 @@ describe('apiRequest', () => {
       headers: expect.objectContaining({ Authorization: 'Bearer jwt-token' }),
     }))
   })
+})
+
+it('limpia una sesión inválida en una petición protegida', async () => {
+  saveSession({ user: { id: 1 }, token: 'expired' })
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 401, json: async () => ({ message: 'Token inválido' }) }))
+  await expect(apiRequest('/subjects')).rejects.toThrow('Tu sesión expiró. Iniciá sesión nuevamente.')
+  expect(getSession()).toBeNull()
+  vi.unstubAllGlobals()
+})
+
+it.each([403, 500])('no cierra la sesión por HTTP %s', async status => {
+  saveSession({ user: { id: 1 }, token: 'valid' })
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status, json: async () => ({ message: 'Error' }) }))
+  await expect(apiRequest('/tasks')).rejects.toBeInstanceOf(ApiError)
+  expect(getSession()?.token).toBe('valid')
+  clearSession(); vi.unstubAllGlobals()
+})
+
+it('un 401 tardío no cierra una nueva sesión', async () => {
+  saveSession({ user: { id: 1 }, token: 'old' })
+  let resolve
+  vi.stubGlobal('fetch', vi.fn(() => new Promise(done => { resolve = done })))
+  const request = apiRequest('/subjects')
+  saveSession({ user: { id: 2 }, token: 'new' })
+  resolve({ ok: false, status: 401, json: async () => ({ message: 'Token inválido' }) })
+  await expect(request).rejects.toBeInstanceOf(ApiError)
+  expect(getSession()?.token).toBe('new')
+  clearSession(); vi.unstubAllGlobals()
+})
+
+it('las credenciales incorrectas no invalidan una sesión existente', async () => {
+  saveSession({ user: { id: 1 }, token: 'valid' })
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 401, json: async () => ({ message: 'Credenciales incorrectas' }) }))
+  await expect(apiRequest('/auth/login')).rejects.toThrow('Credenciales incorrectas')
+  expect(getSession()?.token).toBe('valid')
+  clearSession(); vi.unstubAllGlobals()
 })

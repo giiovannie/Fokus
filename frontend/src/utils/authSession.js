@@ -18,3 +18,14 @@ export const clearSession = () => {
 }
 
 export const getAccessToken = () => getSession()?.token ?? null
+
+export const SESSION_EXPIRED_EVENT = 'fokus:session-expired'
+export const SESSION_EXPIRED_MESSAGE = 'Tu sesión expiró. Iniciá sesión nuevamente.'
+
+// Una respuesta tardía de una sesión anterior no debe cerrar la nueva.
+export const expireSession = (token) => {
+  if (!token || getAccessToken() !== token) return false
+  clearSession()
+  window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT))
+  return true
+}

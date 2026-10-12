@@ -1,6 +1,9 @@
+import { OwlMark } from '../common/OwlMark.jsx'
+
 export const LoadingState = ({ message = 'Cargando información…' }) => (
-  <div className="d-flex align-items-center gap-3 py-4" role="status">
-    <span aria-hidden="true" className="spinner-border spinner-border-sm text-primary" />{message}
+  <div className="loading-state" role="status" aria-live="polite">
+    <OwlMark loading />
+    <span>{message}<span className="loading-dots" aria-hidden="true"><span /><span /><span /></span></span>
   </div>
 )
 
