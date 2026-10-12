@@ -7,6 +7,39 @@ const run = (options = {}) => processReminderBatch({ repository, send, ...option
 beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime('2026-10-12T11:00Z'); repository = new ReminderMemory(); send = vi.fn().mockResolvedValue(undefined) })
 afterEach(() => vi.useRealTimers())
 describe('recordatorios persistentes con reloj simulado', () => {
+  it('avanza delivery y envía antes de una reconciliación que consume el presupuesto', async () => {
+    vi.setSystemTime('2026-10-12T10:00Z'); await run()
+    vi.setSystemTime('2026-10-12T11:00Z')
+    const advance = vi.spyOn(repository, 'advanceDelivery')
+    const reconcile = repository.nextReconciliation.bind(repository)
+    vi.spyOn(repository, 'nextReconciliation').mockImplementation(async (...args) => {
+      const rows = await reconcile(...args)
+      vi.setSystemTime(Date.now() + workerLimits.durationMs + 1)
+      return rows
+    })
+    const result = await run()
+    expect(advance).toHaveBeenCalledWith(1)
+    expect(result.deliveriesAttempted).toBe(1)
+    expect(result.sent).toBe(1)
+    expect(repository.records[0].status).toBe('sent')
+    expect(advance.mock.invocationCallOrder[0]).toBeLessThan(repository.nextReconciliation.mock.invocationCallOrder[0])
+    await run(); expect(send).toHaveBeenCalledOnce()
+  })
+  it('no avanza delivery ni crea entregas para Simulacro antes del 13/10 a las 06:00 Argentina', async () => {
+    repository.events = [{ ...repository.events[0], exam_date: '2026-10-13', exam_time: '09:00' }]
+    repository.rules = [4320,1440,180,60].map((offset_minutes,id) => ({ id, user_id: 7, event_type: 'exam', offset_minutes, enabled: true }))
+    const advance = vi.spyOn(repository, 'advanceDelivery')
+    vi.setSystemTime('2026-10-12T13:41:00Z') // Creación confirmada: 10:41 Argentina.
+    await run()
+    expect(repository.jobs.map(row => row.offset_minutes)).toEqual([180,60])
+    vi.setSystemTime('2026-10-12T21:42:00Z'); await run()
+    expect(advance).not.toHaveBeenCalled()
+    expect(repository.records).toHaveLength(0)
+    expect(repository.jobs.every(row => row.status === 'pending')).toBe(true)
+    vi.setSystemTime('2026-10-13T09:00:00Z'); await run()
+    expect(advance).toHaveBeenCalledWith(1)
+    expect(repository.records[0].status).toBe('sent')
+  })
   it('entrega pendientes vencidos antes de que la planificación agote los 20 segundos', async () => {
     vi.setSystemTime('2026-10-12T10:00Z'); await run()
     vi.setSystemTime('2026-10-12T11:00Z')
