@@ -13,7 +13,7 @@ export const login = async (req, res, next) => {
     }
 
     return res.json({
-      user: { id: user.id, email: user.email },
+      user: { id: user.id, email: user.email, role: user.role ?? 'student' },
       token: generateToken(user.id),
     })
   } catch (error) {

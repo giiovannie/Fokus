@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto'
 const migrations = await loadMigrations()
 const history = migrations.map(({ name, checksum }) => ({ name, checksum }))
 const tables = [...new Set(['FokusMigrations', ...migrations.map((item) => item.table)])]
-const timeFields = rows => migrations.filter(item => item.kind === 'add_columns' && rows.some(row => row.name === item.name)).flatMap(item => Object.keys(item.columns()).map(Field => ({ Field, Type: 'time', Null: 'YES', Default: null })))
+const timeFields = rows => migrations.filter(item => item.kind === 'add_columns' && rows.some(row => row.name === item.name)).flatMap(item => Object.entries(item.columns()).map(([Field, column]) => ({ Field, Type: column.type.key === 'TIME' ? 'time' : "enum('student','superadmin')", Null: column.allowNull ? 'YES' : 'NO', Default: column.defaultValue ?? null })))
 const enumFields = rows => {
   const item = migrations.find(m => m.kind === 'extend_enum')
   const columns = rows.some(row => row.name === item.name) ? item.columns() : item.previousColumns()
@@ -14,7 +14,7 @@ const enumFields = rows => {
 }
 const fieldsFor = (sql, rows) => sql.includes('notification_preferences') || sql.includes('NOTIFICATION_PREFERENCES') ? enumFields(rows) : [
   ...timeFields(rows),
-  ...(/`tasks`/i.test(sql) ? [{ Field: 'due_date', Type: 'date', Null: rows.some(row => row.name === migrations.at(-1).name) ? 'YES' : 'NO', Default: null }] : []),
+  ...(/`tasks`/i.test(sql) ? [{ Field: 'due_date', Type: 'date', Null: rows.some(row => row.name === migrations.find(item => item.kind === 'relax_nullability').name) ? 'YES' : 'NO', Default: null }] : []),
 ]
 
 const statusDb = (tableNames, rows = [], caseMode = 0) => ({
@@ -49,7 +49,7 @@ describe('migraciones del esquema actual', () => {
     expect(migrationChecksum('changed\n', helper)).not.toBe(current)
   })
   it('reproduce todos los atributos físicos y relaciones de todos los modelos', () => {
-    expect(migrations).toHaveLength(19)
+    expect(migrations).toHaveLength(21)
     for (const item of migrations.filter(item => item.kind === 'create_table')) {
       const model = Object.values(sequelize.models).find((value) => value.tableName === item.table)
       const columns = item.columns()
@@ -82,7 +82,7 @@ describe('migraciones del esquema actual', () => {
   })
   it('informa pendientes en una base vacía sin escribir', async () => {
     const db = statusDb([])
-    expect((await migrationStatus(db)).pending).toHaveLength(19)
+    expect((await migrationStatus(db)).pending).toHaveLength(21)
     expect(db.query).toHaveBeenCalledTimes(2)
     await expect(verifyMigrations(db)).rejects.toThrow('pendientes')
   })
@@ -192,16 +192,39 @@ describe('migraciones del esquema actual', () => {
 })
 
 it('relaja únicamente la fecha sin borrar datos y detecta un ALTER parcial', async () => {
-  const prior = history.slice(0, -1)
-  const { db, query } = migrationDb(tables, prior)
+  const target = migrations.findIndex(item => item.kind === 'relax_nullability')
+  const prior = history.slice(0, target)
+  const existing = tables.filter(name => name !== 'notification_dismissals')
+  const { db, query } = migrationDb(existing, prior)
   await migrate(db)
   const writes = query.mock.calls.filter(([sql]) => /^(CREATE|ALTER|INSERT)/.test(sql))
-  expect(writes).toHaveLength(2)
+  expect(writes).toHaveLength((migrations.length - target) * 2)
   expect(writes[0][0]).toContain('ALTER TABLE `tasks` MODIFY COLUMN `due_date` DATE DEFAULT NULL')
   expect(writes[0][0]).not.toMatch(/NOT NULL|DROP|DELETE|TRUNCATE/)
-  expect(writes[1][1]).toEqual([migrations.at(-1).name, migrations.at(-1).checksum])
-  const partial = statusDb(tables, prior)
+  expect(writes[1][1]).toEqual([migrations[target].name, migrations[target].checksum])
+  const partial = statusDb(existing, prior)
   const original = partial.query.getMockImplementation()
   partial.query.mockImplementation(sql => sql === 'SHOW COLUMNS FROM `tasks`' ? fieldsFor(sql, history) : original(sql))
   await expect(migrationStatus(partial)).rejects.toThrow('parcial')
+})
+
+it('roles y eliminaciones de bandeja generan SQL aditivo compatible y FK CASCADE', () => {
+  const role = migrations.find(item => item.name === '202610120001-add-users-role.js')
+  const column = role.columns().role
+  expect(column.type.values).toEqual(['student', 'superadmin'])
+  expect(column.allowNull).toBe(false)
+  expect(column.defaultValue).toBe('student')
+  const generator = sequelize.getQueryInterface().queryGenerator
+  const sql = generator.attributeToSQL(sequelize.normalizeAttribute(column), { context: 'addColumn' })
+  expect(sql).toContain("ENUM('student', 'superadmin')")
+  expect(sql).toContain("DEFAULT 'student'")
+  const inbox = migrations.find(item => item.table === 'notification_dismissals')
+  const tableSql = createTableSql(sequelize, inbox.table, inbox.columns())
+  expect(tableSql).toContain('UNIQUE KEY `inbox_dismissal_identity` (`user_id`, `notification_key`)')
+  expect(tableSql).toContain('REFERENCES `users` (`id`) ON DELETE CASCADE')
+  expect(tableSql).toContain('CHAR(64)')
+  for (const table of ['profiles', 'teachers', 'subjects', 'notification_preferences', 'notification_rules', 'notification_phrases', 'push_subscriptions', 'notification_reminders']) {
+    const item = migrations.find(migration => migration.table === table && migration.kind === 'create_table')
+    expect(item.columns().user_id.onDelete).toBe('CASCADE')
+  }
 })

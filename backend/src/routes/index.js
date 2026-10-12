@@ -1,3 +1,4 @@
+import { adminRouter } from './admin.routes.js'
 import { notificationWorkerRouter } from './notificationWorker.routes.js'
 import { Router } from 'express'
 import { getHealth } from '../controllers/health.controller.js'
@@ -28,5 +29,6 @@ router.use('/tasks', taskRouter)
 router.use('/notes', noteRouter)
 router.use('/notifications', notificationRouter)
 router.use('/users', userRouter)
+router.use('/admin', adminRouter)
 
 export { router as apiRouter }

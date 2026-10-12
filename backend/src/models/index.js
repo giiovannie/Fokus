@@ -1,3 +1,4 @@
+import { NotificationDismissal } from './NotificationDismissal.js'
 import { NotificationReminder } from './NotificationReminder.js'
 import { NotificationDelivery } from './NotificationDelivery.js'
 import { NotificationWorkerState } from './NotificationWorkerState.js'
@@ -54,4 +55,7 @@ NotificationDelivery.belongsTo(NotificationReminder, { foreignKey: 'reminder_id'
 PushSubscription.hasMany(NotificationDelivery, { foreignKey: 'subscription_id', as: 'notification_deliveries', onDelete: 'SET NULL' })
 NotificationDelivery.belongsTo(PushSubscription, { foreignKey: 'subscription_id', as: 'subscription', onDelete: 'SET NULL' })
 
-export { NotificationReminder, NotificationDelivery, NotificationWorkerState, PushSubscription, NotificationPhrase, NotificationPreference, NotificationRule, Exam, Profile, sequelize, StudyActivity, Subject, Task, TaskNote, Teacher, User }
+User.hasMany(NotificationDismissal, { foreignKey: 'user_id', as: 'notification_dismissals', onDelete: 'CASCADE' })
+NotificationDismissal.belongsTo(User, { foreignKey: 'user_id', as: 'user' })
+
+export { NotificationDismissal, NotificationReminder, NotificationDelivery, NotificationWorkerState, PushSubscription, NotificationPhrase, NotificationPreference, NotificationRule, Exam, Profile, sequelize, StudyActivity, Subject, Task, TaskNote, Teacher, User }

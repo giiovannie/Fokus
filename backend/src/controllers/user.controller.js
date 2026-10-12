@@ -1,3 +1,4 @@
+import { deleteOwnAccount } from '../services/accountDeletion.js'
 import { UniqueConstraintError } from 'sequelize'
 import { hashPassword } from '../helpers/password.js'
 import { User } from '../models/index.js'
@@ -34,4 +35,11 @@ export const getUser = async (req, res, next) => {
   } catch (error) {
     return next(error)
   }
+}
+
+export const deleteAccount = async (req, res, next) => {
+  try {
+    await deleteOwnAccount(req.user.id, req.body.password, req.body.confirmation)
+    return res.status(204).end()
+  } catch (error) { return next(error) }
 }

@@ -1,8 +1,9 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Op } from 'sequelize'
 import { getNotifications } from '../src/controllers/notification.controller.js'
-import { Exam, Task, StudyActivity, Subject, NotificationPreference, NotificationPhrase } from '../src/models/index.js'
+import { Exam, Task, StudyActivity, Subject, NotificationPreference, NotificationPhrase, NotificationDismissal } from '../src/models/index.js'
 
+beforeEach(() => { vi.spyOn(NotificationDismissal, 'findAll').mockResolvedValue([]) })
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers() })
 
 describe('upcoming notifications', () => {

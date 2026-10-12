@@ -22,7 +22,7 @@ beforeEach(() => {
   rows = []; nextId = 1
   vi.stubEnv('VAPID_PUBLIC_KEY', vapid.publicKey); vi.stubEnv('VAPID_PRIVATE_KEY', vapid.privateKey); vi.stubEnv('VAPID_SUBJECT', 'mailto:push@example.test')
   vi.spyOn(sequelize, 'transaction').mockImplementation(fn => fn({ LOCK: { UPDATE: 'UPDATE' } }))
-  vi.spyOn(User, 'findByPk').mockResolvedValue({ id: 7 })
+  vi.spyOn(User, 'findByPk').mockImplementation(async id => ({ id, role: 'student' }))
   vi.spyOn(PushSubscription, 'findOne').mockImplementation(async ({ where }) => rows.find(row => matches(row, where)) || null)
   vi.spyOn(PushSubscription, 'findAll').mockImplementation(async ({ where }) => rows.filter(row => matches(row, where)))
   vi.spyOn(PushSubscription, 'count').mockImplementation(async ({ where }) => rows.filter(row => matches(row, where)).length)

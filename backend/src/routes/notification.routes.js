@@ -6,7 +6,7 @@ import { getNotificationPhrases, createNotificationPhrase, updateNotificationPhr
 import { getNotificationPreferences, putNotificationPreferences, getNotificationRules, createNotificationRule, updateNotificationRule, deleteNotificationRule } from '../controllers/notificationPreferences.controller.js'
 import { previewValidator, phraseValidator, preferenceValidator, ruleValidator, ruleIdValidator, ruleListValidator } from '../validators/notification.validator.js'
 import { validateRequest } from '../middlewares/validate.middleware.js'
-import { getNotifications, previewNotification } from '../controllers/notification.controller.js'
+import { getNotifications, previewNotification, dismissNotification } from '../controllers/notification.controller.js'
 import { authenticate } from '../middlewares/auth.middleware.js'
 
 const router = Router()
@@ -19,6 +19,7 @@ router.post('/push/subscriptions', subscriptionValidator, validateRequest, saveP
 router.delete('/push/subscriptions/:id', ruleIdValidator, validateRequest, deletePushSubscription)
 router.post('/push/test/:id', pushTestLimiter, ruleIdValidator, previewValidator, validateRequest, sendPushTest)
 router.get('/', getNotifications)
+router.delete('/:id', dismissNotification)
 router.post('/preview', previewValidator, validateRequest, previewNotification)
 router.get('/preferences', getNotificationPreferences)
 router.put('/preferences', preferenceValidator, validateRequest, putNotificationPreferences)

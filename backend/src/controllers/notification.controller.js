@@ -1,20 +1,20 @@
+import { createHash } from 'node:crypto'
 import { createHttpError } from '../utils/httpError.js'
 import { buildNotificationMessage } from '../utils/notificationMessages.js'
 import { notificationDefaults } from '../config/notificationPreferences.js'
 import { Op } from 'sequelize'
-import { Exam, StudyActivity, Subject, Task, NotificationPreference, NotificationPhrase } from '../models/index.js'
+import { Exam, StudyActivity, Subject, Task, NotificationPreference, NotificationPhrase, NotificationDismissal } from '../models/index.js'
 import { addDays, calculateDaysRemaining, todayDate } from '../utils/date.js'
 
 const remainingText = (days) => days === 0 ? 'hoy' : `en ${days} ${days === 1 ? 'día' : 'días'}`
 
-export const getNotifications = async (req, res, next) => {
-  try {
+export const buildInbox = async userId => {
     const today = todayDate()
     const limit = addDays(today, 7)
-    const savedPreferences = await NotificationPreference.findOne({ where: { user_id: req.user.id } })
+    const savedPreferences = await NotificationPreference.findOne({ where: { user_id: userId } })
     const preferences = { ...notificationDefaults, ...(savedPreferences?.get ? savedPreferences.get({ plain: true }) : savedPreferences) }
     const phrases = [preferences.exam_style, preferences.task_style].includes('custom')
-      ? await NotificationPhrase.findAll({ where: { user_id: req.user.id } }) : []
+      ? await NotificationPhrase.findAll({ where: { user_id: userId } }) : []
     const eventMessage = (type, event, index) => {
       let style = preferences[type + '_style']
       if (style === 'unfiltered' && !preferences.unfiltered_enabled) style = 'formal'
@@ -30,7 +30,7 @@ export const getNotifications = async (req, res, next) => {
     const includeSubject = () => [{
       model: Subject,
       as: 'subject',
-      where: { user_id: req.user.id },
+      where: { user_id: userId },
       attributes: ['name'],
     }]
 
@@ -49,7 +49,7 @@ export const getNotifications = async (req, res, next) => {
       }),
       StudyActivity.findAll({
         where: { target_date: { [Op.between]: [today, limit] }, status: 'pending' },
-        attributes: ['title', 'target_date'],
+        attributes: ['id', 'title', 'target_date'],
         include: includeSubject(),
         order: [['id', 'ASC']],
       }),
@@ -57,31 +57,48 @@ export const getNotifications = async (req, res, next) => {
 
     const notifications = [
       ...tasks.map((task, index) => ({
-        type: 'task',
+        type: 'task', source_id: task.id,
         message: eventMessage('task', task, index),
         date: task.due_date,
       })),
       ...exams.map((exam, index) => ({
-        type: 'exam',
+        type: 'exam', source_id: exam.id,
         message: eventMessage('exam', exam, index),
         date: exam.exam_date,
       })),
       ...activities.map((activity) => ({
-        type: 'study_activity',
+        type: 'study_activity', source_id: activity.id,
         message: `La actividad ${activity.title} vence ${remainingText(calculateDaysRemaining(activity.target_date, today))}`,
         date: activity.target_date,
       })),
     ].sort((a, b) => a.date.localeCompare(b.date))
 
-    return res.json(notifications.map(({ type, message }, index) => ({
-      id: index + 1,
-      type,
-      message,
-      read: false,
-    })))
-  } catch (error) {
-    return next(error)
-  }
+    return notifications.map(({ type, message, date, source_id }) => ({
+      id: createHash('sha256').update(JSON.stringify([userId, type, source_id, date])).digest('hex'),
+      type, message, date, read: false,
+    }))
+}
+
+export const getNotifications = async (req, res, next) => {
+  try {
+    const [notifications, dismissed] = await Promise.all([
+      buildInbox(req.user.id), NotificationDismissal.findAll({ where: { user_id: req.user.id }, attributes: ['notification_key'] }),
+    ])
+    const keys = new Set(dismissed.map(row => row.notification_key))
+    return res.json(notifications.filter(item => !keys.has(item.id)))
+  } catch (error) { return next(error) }
+}
+
+export const dismissNotification = async (req, res, next) => {
+  try {
+    const key = req.params.id
+    if (!/^[a-f0-9]{64}$/.test(key)) throw createHttpError(400, 'La notificación no es válida')
+    const where = { user_id: req.user.id, notification_key: key }
+    if (await NotificationDismissal.findOne({ where })) return res.status(204).end()
+    if (!(await buildInbox(req.user.id)).some(item => item.id === key)) throw createHttpError(404, 'La notificación no fue encontrada')
+    await NotificationDismissal.findOrCreate({ where })
+    return res.status(204).end()
+  } catch (error) { return next(error) }
 }
 
 // Vista previa autenticada: consultas de lectura, sin entrega ni planificación.

@@ -1,9 +1,9 @@
 import { PassThrough } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { v2 as cloudinary } from 'cloudinary'
-import { deleteAvatar, getOwnedAvatarId, uploadAvatar } from '../src/services/cloudinary.service.js'
+import { deleteAvatar, deleteAccountAvatars, getOwnedAvatarId, uploadAvatar } from '../src/services/cloudinary.service.js'
 
-vi.mock('cloudinary', () => ({ v2: { config: vi.fn(), uploader: { upload_stream: vi.fn(), destroy: vi.fn() } } }))
+vi.mock('cloudinary', () => ({ v2: { api: { delete_resources_by_prefix: vi.fn() }, config: vi.fn(), uploader: { upload_stream: vi.fn(), destroy: vi.fn() } } }))
 
 describe('servicio Cloudinary', () => {
   beforeEach(() => {
@@ -70,5 +70,27 @@ describe('servicio Cloudinary', () => {
     cloudinary.uploader.destroy.mockRejectedValue(new Error('private provider details'))
     await expect(deleteAvatar('owned-image')).rejects.toMatchObject({ status: 503, message: 'No se pudo completar la limpieza de imágenes' })
     expect(cloudinary.uploader.destroy).toHaveBeenCalledTimes(3)
+  })
+})
+
+describe('retiro de fotos de la cuenta', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.stubEnv('CLOUDINARY_CLOUD_NAME', 'test-cloud'); vi.stubEnv('CLOUDINARY_API_KEY', 'test-only'); vi.stubEnv('CLOUDINARY_API_SECRET', 'test-only')
+    cloudinary.api.delete_resources_by_prefix.mockResolvedValue({ deleted: {}, partial: false })
+  })
+  afterEach(() => vi.unstubAllEnvs())
+  it('usa un prefijo propio con separador y recorre resultados parciales', async () => {
+    cloudinary.api.delete_resources_by_prefix.mockResolvedValueOnce({ deleted: { 'fokus/avatars/7/3/a': 'deleted' }, partial: true, next_cursor: 'test-cursor' })
+    await deleteAccountAvatars(7, { required: true })
+    expect(cloudinary.api.delete_resources_by_prefix).toHaveBeenCalledTimes(2)
+    expect(cloudinary.api.delete_resources_by_prefix).toHaveBeenLastCalledWith('fokus/avatars/7/', expect.objectContaining({ next_cursor: 'test-cursor', invalidate: true }))
+  })
+  it('no acepta prefijos arbitrarios ni declara éxito con limpieza parcial', async () => {
+    await expect(deleteAccountAvatars('../8')).rejects.toMatchObject({ status: 400 })
+    expect(cloudinary.api.delete_resources_by_prefix).not.toHaveBeenCalled()
+    cloudinary.api.delete_resources_by_prefix.mockResolvedValue({ deleted: {}, partial: true, next_cursor: 'test-cursor' })
+    await expect(deleteAccountAvatars(7)).rejects.toMatchObject({ status: 503 })
+    expect(cloudinary.api.delete_resources_by_prefix).toHaveBeenCalledTimes(3)
   })
 })
