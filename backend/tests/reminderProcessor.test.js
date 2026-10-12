@@ -7,6 +7,53 @@ const run = (options = {}) => processReminderBatch({ repository, send, ...option
 beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime('2026-10-12T11:00Z'); repository = new ReminderMemory(); send = vi.fn().mockResolvedValue(undefined) })
 afterEach(() => vi.useRealTimers())
 describe('recordatorios persistentes con reloj simulado', () => {
+  it('entrega pendientes vencidos antes de que la planificación agote los 20 segundos', async () => {
+    vi.setSystemTime('2026-10-12T10:00Z'); await run()
+    vi.setSystemTime('2026-10-12T11:00Z')
+    const plan = repository.planEvent.bind(repository)
+    vi.spyOn(repository, 'planEvent').mockImplementation(async (...args) => {
+      await plan(...args)
+      vi.setSystemTime(Date.now() + workerLimits.durationMs + 1)
+    })
+    const result = await run()
+    expect(result.deliveriesAttempted).toBe(1)
+    expect(result.sent).toBe(1)
+    expect(repository.records[0].status).toBe('sent')
+    expect(repository.jobs[0].status).toBe('processed')
+    await run(); expect(send).toHaveBeenCalledOnce()
+  })
+  it('revalida reglas antes de enviar un pendiente aunque se difiera la planificación', async () => {
+    vi.setSystemTime('2026-10-12T10:00Z'); await run()
+    repository.rules[0].enabled = false
+    vi.setSystemTime('2026-10-12T11:00Z')
+    await run()
+    expect(send).not.toHaveBeenCalled()
+    expect(repository.jobs[0].status).toBe('cancelled')
+  })
+  it('mantiene el límite de pendientes entre las dos pasadas de entrega', async () => {
+    vi.setSystemTime('2026-10-12T10:00Z'); await run()
+    repository.events.push({ ...repository.events[0], id: 2 })
+    vi.setSystemTime('2026-10-12T11:00Z')
+    const first = await run({ limits: { ...workerLimits, reminders: 1 } })
+    expect(first.sent).toBe(1)
+    expect(repository.jobs.find(row => row.event_id === 2).status).toBe('pending')
+    const second = await run({ limits: { ...workerLimits, reminders: 1 } })
+    expect(second.sent).toBe(1)
+    expect(send).toHaveBeenCalledTimes(2)
+  })
+  it('crea solo avisos futuros para un examen de Argentina creado después de 3 días y 1 día', async () => {
+    repository.events = [{ ...repository.events[0], title: 'Simulacro (simulación)', exam_date: '2026-10-13', exam_time: '09:00' }]
+    repository.rules = [4320,1440,180,60].map((offset_minutes,id) => ({ id, user_id: 7, event_type: 'exam', offset_minutes, enabled: true }))
+    vi.setSystemTime('2026-10-12T15:00Z') // 12:00 Argentina; el aviso de 1 día vencía a las 09:00.
+    await run()
+    expect(repository.jobs.map(row => row.offset_minutes)).toEqual([180,60])
+    expect(repository.jobs.map(row => row.due_at.toISOString())).toEqual(['2026-10-13T09:00:00.000Z','2026-10-13T11:00:00.000Z'])
+    expect(send).not.toHaveBeenCalled()
+    vi.setSystemTime('2026-10-13T09:00:00Z'); await run()
+    vi.setSystemTime('2026-10-13T11:00:00Z'); await run(); await run()
+    expect(send).toHaveBeenCalledTimes(2)
+    expect(repository.jobs.every(row => row.status === 'processed')).toBe(true)
+  })
   it('envía una vez a cada dispositivo propio y nunca a otro usuario', async () => {
     repository.devices.push({ id: 2, user_id: 7, device_id: 'device-b' }, { id: 3, user_id: 8, device_id: 'device-c' })
     const result = await run()
