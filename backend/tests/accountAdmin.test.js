@@ -3,7 +3,7 @@ import request from 'supertest'
 import { Op } from 'sequelize'
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest'
 import { app } from '../src/app.js'
-import { User, Profile, Teacher, Subject, Task, Exam, NotificationReminder, NotificationDelivery, NotificationWorkerState, sequelize } from '../src/models/index.js'
+import { User, Profile, Teacher, Subject, Task, Exam, StudyActivity, AdminEvent, NotificationReminder, NotificationDelivery, NotificationWorkerState, sequelize } from '../src/models/index.js'
 import { comparePassword } from '../src/helpers/password.js'
 import { deleteAccountAvatars, getOwnedAvatarId } from '../src/services/cloudinary.service.js'
 import { ReminderRepository } from '../src/services/reminderRepository.js'
@@ -24,6 +24,8 @@ beforeEach(() => {
   vi.spyOn(User, 'findByPk').mockImplementation(async id => accounts.get(Number(id)) ?? null)
   transaction = vi.spyOn(sequelize, 'transaction').mockImplementation(async action => action(tx))
   vi.spyOn(ReminderRepository.prototype, 'withRunLock').mockImplementation(async action => action(owned))
+  vi.spyOn(AdminEvent, 'update').mockResolvedValue([1])
+  vi.spyOn(AdminEvent, 'create').mockResolvedValue({})
   profile = { id: 3, user_id: 7, avatar_url: 'owned-photo' }
   vi.spyOn(Profile, 'findOne').mockImplementation(async ({ where }) => where.user_id === 7 ? profile : null)
   vi.spyOn(Teacher, 'findAll').mockResolvedValue([{ id: 4 }])
@@ -108,11 +110,19 @@ describe('superadministración', () => {
     vi.spyOn(Task, 'count').mockResolvedValue(20)
     vi.spyOn(Exam, 'count').mockResolvedValue(7)
     vi.spyOn(User, 'findAll').mockResolvedValue([])
+    vi.spyOn(StudyActivity, 'count').mockResolvedValue(0)
+    vi.spyOn(Task, 'findAll').mockResolvedValue([])
+    vi.spyOn(Exam, 'findAll').mockResolvedValue([])
     vi.spyOn(sequelize, 'query').mockResolvedValue([{ count: 3 }])
     const res = await auth(request(app).get('/api/admin/statistics'), 8)
     expect(res.status).toBe(200)
     expect(res.body.totals).toEqual({ users: 9, subjects: 12, tasks: 20, exams: 7 })
     expect(res.body.registration_history).toHaveLength(30)
+    expect(res.body.academic_history).toHaveLength(30)
+    expect(res.body.academic_history.every(day => day.tasks === 0 && day.exams === 0)).toBe(true)
+    expect(res.body.accounts).toEqual({ active: 9, suspended: 9 })
+    expect(User.count).toHaveBeenCalledWith({ where: { status: 'suspended' } })
+    expect(res.body.registrations).toHaveProperty('previous_month')
     expect(res.body.active_users_last_7_days).toBe(3)
     expect(res.body.activity_definition).toContain('No mide visitas')
     expect(res.headers['cache-control']).toBe('no-store')

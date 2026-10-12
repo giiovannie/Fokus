@@ -1262,3 +1262,69 @@ Solicita la contraseña actual de esa cuenta en una terminal interactiva, sin ec
 El operador debe verificar previamente el control del correo: el login actual no prueba
 por sí solo su titularidad. Volver a iniciar sesión para actualizar la navegación.
 No se ejecutó este procedimiento ni se concedieron privilegios en producción.
+
+## Administración avanzada (Beta 0.1)
+
+Migraciones nuevas preparadas, **sin ejecutar**: `202610120003-add-users-status.js`
+(estado `active|suspended`, cuentas existentes habilitadas por defecto) y
+`202610120004-create-admin-events.js` (actor, objetivo, acción, motivo opcional y fecha).
+La segunda usa FK `SET NULL`; al borrar una cuenta se limpian los motivos de sus
+eventos y el evento de eliminación conserva únicamente actor, acción y fecha.
+No almacena email, nombre, contraseña ni identificador del objetivo eliminado.
+
+Todas las rutas `/api/admin` requieren JWT y rol **actual** `superadmin`, devuelven
+`Cache-Control: no-store` y tienen límites de solicitudes. El rol nunca depende del
+correo. Las rutas académicas y de notificaciones requieren `student`; superadmin
+recibe 403. Login de cuenta suspendida recibe 403; un JWT previo de esa cuenta
+recibe 401 y el frontend cierra la sesión.
+
+- `GET /api/admin/users`: query `page` (1–100000), `limit` (1–100, predeterminado 20),
+  `search` (hasta 160 caracteres: ID/nombre/email), `role`, `status`,
+  `sort=id|email|createdAt|role|status`, `direction=ASC|DESC`.
+  Respuesta `{ users, total, page, limit, totalPages }`; cada cuenta contiene solo
+  `{ id, email, username, role, status, createdAt }`. No se inventa última actividad.
+- `GET /api/admin/users/:id`: `{ user, totals: { subjects, teachers }, events,
+  activity_note }`. Hasta 20 eventos administrativos recientes del objetivo,
+  con actor, acción, motivo y fecha; sin contenidos académicos ni datos Push.
+- `PATCH /api/admin/users/:id/status`: cuerpo
+  `{ status: "active"|"suspended", confirmation: "CONFIRMAR", reason?: string }`.
+  Motivo opcional, hasta 500 caracteres. Respuesta `{ id, status }` tras commit.
+  Repetir el mismo estado no duplica auditoría. Cuenta propia:403, inexistente:404,
+  worker ocupado:409. Comparte el lock del worker; no borra datos académicos ni
+  preferencias. Mientras esté bloqueada, no se planifican ni envían nuevos avisos.
+- `DELETE /api/admin/users/:id`: `{ password, confirmation: "ELIMINAR" }`.
+  La contraseña es la del **superadministrador**, verificada dentro de la
+  transacción con su rol/estado actual. Cuenta propia:403. Reutiliza todas las
+  comprobaciones, cascadas, bloqueo y limpieza Cloudinary de la eliminación propia.
+  204 solo tras commit; inexistente:404, contraseña:403, conflictos:409.
+- `GET /api/admin/subjects`: `page`, `limit`, `search`, `direction` y
+  `sort=frequency`. Respuesta `{ subjects, total, totalUnique, totalRegistrations,
+  topSubjects, page, limit, totalPages }`. Cada grupo incluye
+  `{ key, name, frequency, variant_count, variants }`, con hasta 20 variantes
+  originales. Agregación SQL en lotes de 500 nombres y normalización Unicode NFD,
+  tildes, espacios y minúsculas; no compara similitud ni altera registros.
+  La agregación recorre todos los nombres distintos para calcular totales exactos.
+- `GET /api/admin/system`: `{ api, database, application_version, notifications,
+  generated_at }`. MySQL se comprueba por conexión; notificaciones informa
+  habilitación del worker y conteos persistidos pending/failed/sent. No demuestra
+  que QStash invoque puntualmente ni que los dispositivos lean los avisos. Sin
+  conexión, `database=unavailable`, `notifications=null`. No publica configuración.
+- `GET /api/admin/statistics` conserva campos existentes y agrega `accounts`
+  (active/suspended), `registrations` (today/last_7_days/month_to_date/previous_month),
+  `academic` (activities/tasks_without_date/tasks_with_date) y `academic_history`
+  (30 filas `{ day, tasks, exams }`). Fechas UTC; mes actual parcial y mes anterior
+  completo se identifican claramente. Cuentas habilitadas no equivale a visitantes
+  activos. Históricos describen registros aún existentes; no registran eliminados.
+- `DELETE /api/notifications`: solo estudiante autenticado; descarta una instantánea
+  de todos los avisos existentes mediante `notification_dismissals`, con inserción
+  idempotente. Responde 204. No borra eventos ni cancela Push; nuevos eventos o
+  nuevas fechas siguen produciendo avisos. Una creación concurrente posterior a la
+  instantánea se conserva. Frontend exige confirmación y actualiza lista/contador
+  después de la respuesta correcta del servidor.
+
+Antes de producción: respaldo y prueba en MySQL 8 aislado, revisión del SQL y del
+historial, luego aplicación autorizada de ambas migraciones **antes** de publicar
+el backend. `ALTER TABLE users` puede bloquear temporalmente; el DDL MySQL no tiene
+rollback transaccional. Un fallo parcial requiere revisión, nunca repetir DDL a
+ciegas. Se prepararon pruebas de SQL generado y correspondencia modelo/migración;
+no sustituyen una prueba con el motor real. No ejecutar en Aiven durante desarrollo.

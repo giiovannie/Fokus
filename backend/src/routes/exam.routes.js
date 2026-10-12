@@ -7,7 +7,7 @@ import {
   updateExam,
   updateExamGrade,
 } from '../controllers/exam.controller.js'
-import { authenticate } from '../middlewares/auth.middleware.js'
+import { authenticate, requireStudent } from '../middlewares/auth.middleware.js'
 import { validateRequest } from '../middlewares/validate.middleware.js'
 import {
   createExamValidator,
@@ -18,7 +18,7 @@ import {
 
 const router = Router()
 
-router.use(authenticate)
+router.use(authenticate, requireStudent)
 router.get('/', getExams)
 router.get('/:id', examIdValidator, validateRequest, getExam)
 router.post('/', createExamValidator, validateRequest, createExam)

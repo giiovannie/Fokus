@@ -1,16 +1,19 @@
 import { Op } from 'sequelize'
 import { comparePassword } from '../helpers/password.js'
-import { Profile, Subject, Teacher, User, NotificationReminder, NotificationWorkerState, NotificationDelivery, PushSubscription, sequelize } from '../models/index.js'
+import { AdminEvent, Profile, Subject, Teacher, User, NotificationReminder, NotificationWorkerState, NotificationDelivery, PushSubscription, sequelize } from '../models/index.js'
 import { ReminderRepository } from './reminderRepository.js'
 import { deleteAccountAvatars, getOwnedAvatarId } from './cloudinary.service.js'
 import { createHttpError } from '../utils/httpError.js'
 
-export const deleteOwnAccount = async (userId, password, confirmation) => {
+export const deleteOwnAccount = async (userId, password, confirmation, actorId = userId) => {
   if (confirmation !== 'ELIMINAR') throw createHttpError(400, 'Escribí ELIMINAR para confirmar')
   // Compartir el bloqueo existente impide borrar mientras un lote envía Push.
   const result = await new ReminderRepository().withRunLock(async assertOwned => sequelize.transaction(async transaction => {
-    const user = await User.findByPk(userId, { transaction, lock: transaction.LOCK.UPDATE })
-    if (!user || !await comparePassword(password, user.password)) throw createHttpError(403, 'La contraseña actual no es correcta')
+    const actor = await User.findByPk(actorId, { transaction, lock: transaction.LOCK.UPDATE })
+    if (!actor || actor.status === 'suspended' || !await comparePassword(password, actor.password)) throw createHttpError(403, 'La contraseña actual no es correcta')
+    if (actorId !== userId && actor.role !== 'superadmin') throw createHttpError(403, 'No tenés permiso para eliminar cuentas')
+    const user = actorId === userId ? actor : await User.findByPk(userId, { transaction, lock: transaction.LOCK.UPDATE })
+    if (!user) throw createHttpError(404, 'La cuenta no fue encontrada')
     const teachers = await Teacher.findAll({ where: { user_id: userId }, attributes: ['id'], transaction })
     if (teachers.length && await Subject.count({ where: { teacher_id: { [Op.in]: teachers.map(row => row.id) }, user_id: { [Op.ne]: userId } }, transaction })) {
       throw createHttpError(409, 'Hay relaciones con otra cuenta. Se requiere una revisión antes de eliminar.')
@@ -32,6 +35,9 @@ export const deleteOwnAccount = async (userId, password, confirmation) => {
     // CASCADE elimina notas, tareas, exámenes y actividades; no tocar filas ajenas.
     await Subject.destroy({ where: { user_id: userId }, transaction })
     await Teacher.destroy({ where: { user_id: userId }, transaction })
+    // Los motivos dejan de conservarse al eliminar cualquiera de las cuentas implicadas.
+    if (actorId !== userId) await AdminEvent.create({ actor_id: actorId, target_id: null, action: 'delete', reason: null }, { transaction })
+    await AdminEvent.update({ reason: null }, { where: { [Op.or]: [{ target_id: userId }, { actor_id: userId }] }, transaction })
     // Las FK de users eliminan perfil, preferencias, frases, reglas, suscripciones,
     // recordatorios/entregas y eliminaciones de bandeja dentro de la transacción.
     await user.destroy({ transaction })

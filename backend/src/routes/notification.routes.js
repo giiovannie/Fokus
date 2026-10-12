@@ -6,12 +6,12 @@ import { getNotificationPhrases, createNotificationPhrase, updateNotificationPhr
 import { getNotificationPreferences, putNotificationPreferences, getNotificationRules, createNotificationRule, updateNotificationRule, deleteNotificationRule } from '../controllers/notificationPreferences.controller.js'
 import { previewValidator, phraseValidator, preferenceValidator, ruleValidator, ruleIdValidator, ruleListValidator } from '../validators/notification.validator.js'
 import { validateRequest } from '../middlewares/validate.middleware.js'
-import { getNotifications, previewNotification, dismissNotification } from '../controllers/notification.controller.js'
-import { authenticate } from '../middlewares/auth.middleware.js'
+import { getNotifications, previewNotification, dismissNotification, dismissAllNotifications } from '../controllers/notification.controller.js'
+import { authenticate, requireStudent } from '../middlewares/auth.middleware.js'
 
 const router = Router()
 
-router.use(authenticate)
+router.use(authenticate, requireStudent)
 const pushTestLimiter = rateLimit({ windowMs: 60000, limit: 30, keyGenerator: req => String(req.user.id), standardHeaders: 'draft-7', legacyHeaders: false, message: { message: 'Hiciste demasiadas pruebas. Esperá un minuto antes de volver a intentar.' } })
 router.get('/push/config', getPushConfig)
 router.get('/push/subscriptions', listPushSubscriptions)
@@ -19,6 +19,7 @@ router.post('/push/subscriptions', subscriptionValidator, validateRequest, saveP
 router.delete('/push/subscriptions/:id', ruleIdValidator, validateRequest, deletePushSubscription)
 router.post('/push/test/:id', pushTestLimiter, ruleIdValidator, previewValidator, validateRequest, sendPushTest)
 router.get('/', getNotifications)
+router.delete('/', dismissAllNotifications)
 router.delete('/:id', dismissNotification)
 router.post('/preview', previewValidator, validateRequest, previewNotification)
 router.get('/preferences', getNotificationPreferences)

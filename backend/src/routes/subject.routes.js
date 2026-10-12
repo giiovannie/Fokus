@@ -6,7 +6,7 @@ import {
   getSubjects,
   updateSubject,
 } from '../controllers/subject.controller.js'
-import { authenticate } from '../middlewares/auth.middleware.js'
+import { authenticate, requireStudent } from '../middlewares/auth.middleware.js'
 import { validateRequest } from '../middlewares/validate.middleware.js'
 import { subjectBodyValidator, subjectIdValidator } from '../validators/subject.validator.js'
 import { getSubjectTasks } from '../controllers/task.controller.js'
@@ -16,7 +16,7 @@ import { examSubjectIdValidator } from '../validators/exam.validator.js'
 
 const router = Router()
 
-router.use(authenticate)
+router.use(authenticate, requireStudent)
 router.get('/', getSubjects)
 router.get('/:subjectId/tasks', taskSubjectIdValidator, validateRequest, getSubjectTasks)
 router.get('/:subjectId/exams', examSubjectIdValidator, validateRequest, getSubjectExams)
