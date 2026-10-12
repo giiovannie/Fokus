@@ -32,7 +32,7 @@ it('confirma eliminación, conserva errores y actualiza lista y contador despué
   const remove = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true)
   const Harness = () => {
     const [notifications, setNotifications] = useState([{ id: 'test-id', type: 'exam', message: 'Mi frase\nDatos reales del evento', read: false }])
-    return <MemoryRouter><AppContext.Provider value={{ data: { notifications }, refreshNotifications: vi.fn(), updateItem: vi.fn(), removeItem: async (collection, id) => { if (!await remove(collection, id)) return false; setNotifications([]); return true } }}><NotificationsPage /></AppContext.Provider></MemoryRouter>
+    return <MemoryRouter><AppContext.Provider value={{ data: { notifications }, notify: vi.fn(), refreshNotifications: vi.fn(), updateItem: vi.fn(), removeItem: async (collection, id) => { if (!await remove(collection, id)) return false; setNotifications([]); return true } }}><NotificationsPage /></AppContext.Provider></MemoryRouter>
   }
   render(<Harness />)
   await userEvent.click(screen.getByRole('button', { name: /Eliminar notificación: Mi frase/ }))

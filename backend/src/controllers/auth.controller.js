@@ -11,6 +11,7 @@ export const login = async (req, res, next) => {
     if (!validPassword) {
       throw createHttpError(401, 'Credenciales incorrectas')
     }
+    if (user.status === 'suspended') throw createHttpError(403, 'Tu cuenta está suspendida. Contactá al administrador.')
 
     return res.json({
       user: { id: user.id, email: user.email, role: user.role ?? 'student' },

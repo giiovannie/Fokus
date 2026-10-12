@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { Op } from 'sequelize'
-import { NotificationPreference, NotificationRule, NotificationPhrase, NotificationReminder, NotificationDelivery, NotificationWorkerState, PushSubscription, Exam, Task, Subject, sequelize } from '../models/index.js'
+import { User, NotificationPreference, NotificationRule, NotificationPhrase, NotificationReminder, NotificationDelivery, NotificationWorkerState, PushSubscription, Exam, Task, Subject, sequelize } from '../models/index.js'
 import { withUserLock } from '../utils/withUserLock.js'
 import { localPlanningDates } from './reminderTime.js'
 import { notificationDefaults } from '../config/notificationPreferences.js'
@@ -44,7 +44,7 @@ export class ReminderRepository {
   }
   async nextUsers(limit) {
     const state = await this.cursor('users')
-    const load = cursor => NotificationPreference.findAll({ where: { user_id: { [Op.gt]: cursor } }, order: [['user_id', 'ASC']], limit })
+    const load = cursor => NotificationPreference.findAll({ where: { user_id: { [Op.gt]: cursor } }, include: [{ model: User, as: 'user', where: { role: 'student', status: 'active' }, attributes: [] }], order: [['user_id', 'ASC']], limit })
     let rows = await load(state.cursor)
     if (!rows.length && state.cursor) { await state.update({ cursor: 0 }); rows = await load(0) }
     return rows.map(plain)
@@ -62,6 +62,8 @@ export class ReminderRepository {
   }
   async advanceEvent(userId, type, id) { await (await this.cursor('events:' + userId + ':' + type)).update({ cursor: id }) }
   async snapshot(userId, type, eventId) {
+    const user = await User.findByPk(userId, { attributes: ['id', 'role', 'status'] })
+    if (!user || user.role !== 'student' || user.status === 'suspended') return { event: null, preferences: notificationDefaults, rules: [], phrases: [] }
     const model = type === 'exam' ? Exam : Task
     const [event, preferences, rules, phrases] = await Promise.all([
       model.findOne({ where: { id: eventId }, include: [{ model: Subject, as: 'subject', where: { user_id: userId }, attributes: ['name', 'user_id'] }] }),
@@ -112,7 +114,11 @@ export class ReminderRepository {
   async group(row) {
     return (await NotificationReminder.findAll({ where: { user_id: row.user_id, event_type: row.event_type, event_id: row.event_id, due_at: row.due_at, event_at: row.event_at }, order: [['id', 'ASC']] })).map(plain)
   }
-  async subscriptions(userId) { return (await PushSubscription.findAll({ where: { user_id: userId }, order: [['id', 'ASC']], limit: 10 })).map(plain) }
+  async subscriptions(userId) {
+    const user = await User.findByPk(userId, { attributes: ['id', 'role', 'status'] })
+    if (!user || user.role !== 'student' || user.status === 'suspended') return []
+    return (await PushSubscription.findAll({ where: { user_id: userId }, order: [['id', 'ASC']], limit: 10 })).map(plain)
+  }
   async deliveryFor(row, subscription, now) {
     const hash = subscriptionHash(subscription)
     const [delivery] = await NotificationDelivery.findOrCreate({ where: { reminder_id: row.id, device_id: subscription.device_id }, defaults: { subscription_id: subscription.id, subscription_hash: hash, next_attempt_at: new Date(now) } })

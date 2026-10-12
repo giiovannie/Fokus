@@ -1,5 +1,9 @@
 import { AdminRoute } from './AdminRoute.jsx'
 import { AdminDashboardPage } from '../pages/AdminDashboardPage.jsx'
+import { AdminLayout } from '../layouts/AdminLayout.jsx'
+import { StudentRoute } from './StudentRoute.jsx'
+import { AdminUsersPage } from '../pages/AdminUsersPage.jsx'
+import { AdminSubjectsPage, AdminSystemPage } from '../pages/AdminInformationPage.jsx'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { MainLayout } from '../layouts/MainLayout.jsx'
 import { AuthLayout } from '../layouts/AuthLayout.jsx'
@@ -23,8 +27,14 @@ const AppRoutes = () => (
       <Route path="/register" element={<RegisterPage />} />
     </Route>
     <Route element={<ProtectedRoute />}>
+      <Route element={<AdminRoute />}><Route element={<AdminLayout />}>
+        <Route path="admin" element={<AdminDashboardPage />} />
+        <Route path="admin/users" element={<AdminUsersPage />} />
+        <Route path="admin/subjects" element={<AdminSubjectsPage />} />
+        <Route path="admin/system" element={<AdminSystemPage />} />
+      </Route></Route>
+      <Route element={<StudentRoute />}>
       <Route element={<MainLayout />}>
-        <Route element={<AdminRoute />}><Route path="admin" element={<AdminDashboardPage />} /></Route>
         <Route index element={<DashboardPage />} />
         <Route path="subjects" element={<SubjectsPage />} />
         <Route path="tasks" element={<TasksPage />} />
@@ -33,6 +43,7 @@ const AppRoutes = () => (
         <Route path="notifications/preferences" element={<NotificationPreferencesPage />} />
         <Route path="notifications" element={<NotificationsPage />} />
         <Route path="profile" element={<ProfilePage />} />
+      </Route>
       </Route>
     </Route>
     <Route path="/home" element={<Navigate replace to="/" />} />

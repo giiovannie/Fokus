@@ -456,3 +456,14 @@ a {
 @media (max-width: 575px) { .notification-card { padding: 0.875rem; gap: 0.5rem; } }
 
 .notification-card:hover { background: var(--bg-highlight); }
+/* El espacio entre campos no depende de que exista un error de validación. */
+.login-form .form-label { margin-top: 1rem; margin-bottom: .6rem; }
+.login-form .form-control { padding: .8rem 1rem; }
+.login-form .invalid-feedback { margin-top: .5rem; margin-bottom: 0 !important; }
+.login-form > .btn { margin-top: 1.75rem; padding: .8rem 1rem; }
+.login-form .alert { margin-top: 1.25rem; margin-bottom: 0; }
+.admin-shell { background: var(--bg-main); }
+.admin-shell .table { min-width: 560px; }
+
+.admin-shell .admin-users-table { min-width: 960px; }
+.admin-users-table th, .admin-users-table td { white-space: nowrap; }

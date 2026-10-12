@@ -4,7 +4,7 @@ import {
   getStudyActivities,
   updateStudyActivityStatus,
 } from '../controllers/studyActivity.controller.js'
-import { authenticate } from '../middlewares/auth.middleware.js'
+import { authenticate, requireStudent } from '../middlewares/auth.middleware.js'
 import { validateRequest } from '../middlewares/validate.middleware.js'
 import {
   activityIdValidator,
@@ -14,7 +14,7 @@ import {
 
 const router = Router()
 
-router.use(authenticate)
+router.use(authenticate, requireStudent)
 router.get('/', getStudyActivities)
 router.post('/', createActivityValidator, validateRequest, createStudyActivity)
 router.patch('/:id/status', activityIdValidator, activityStatusValidator, validateRequest, updateStudyActivityStatus)

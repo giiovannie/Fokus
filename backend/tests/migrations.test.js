@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto'
 const migrations = await loadMigrations()
 const history = migrations.map(({ name, checksum }) => ({ name, checksum }))
 const tables = [...new Set(['FokusMigrations', ...migrations.map((item) => item.table)])]
-const timeFields = rows => migrations.filter(item => item.kind === 'add_columns' && rows.some(row => row.name === item.name)).flatMap(item => Object.entries(item.columns()).map(([Field, column]) => ({ Field, Type: column.type.key === 'TIME' ? 'time' : "enum('student','superadmin')", Null: column.allowNull ? 'YES' : 'NO', Default: column.defaultValue ?? null })))
+const timeFields = rows => migrations.filter(item => item.kind === 'add_columns' && rows.some(row => row.name === item.name)).flatMap(item => Object.entries(item.columns()).map(([Field, column]) => ({ Field, Type: column.type.key === 'TIME' ? 'time' : 'enum(' + column.type.values.map(value => "'" + value + "'").join(',') + ')' , Null: column.allowNull ? 'YES' : 'NO', Default: column.defaultValue ?? null })))
 const enumFields = rows => {
   const item = migrations.find(m => m.kind === 'extend_enum')
   const columns = rows.some(row => row.name === item.name) ? item.columns() : item.previousColumns()
@@ -49,7 +49,7 @@ describe('migraciones del esquema actual', () => {
     expect(migrationChecksum('changed\n', helper)).not.toBe(current)
   })
   it('reproduce todos los atributos físicos y relaciones de todos los modelos', () => {
-    expect(migrations).toHaveLength(21)
+    expect(migrations).toHaveLength(23)
     for (const item of migrations.filter(item => item.kind === 'create_table')) {
       const model = Object.values(sequelize.models).find((value) => value.tableName === item.table)
       const columns = item.columns()
@@ -82,7 +82,7 @@ describe('migraciones del esquema actual', () => {
   })
   it('informa pendientes en una base vacía sin escribir', async () => {
     const db = statusDb([])
-    expect((await migrationStatus(db)).pending).toHaveLength(21)
+    expect((await migrationStatus(db)).pending).toHaveLength(23)
     expect(db.query).toHaveBeenCalledTimes(2)
     await expect(verifyMigrations(db)).rejects.toThrow('pendientes')
   })
@@ -194,7 +194,7 @@ describe('migraciones del esquema actual', () => {
 it('relaja únicamente la fecha sin borrar datos y detecta un ALTER parcial', async () => {
   const target = migrations.findIndex(item => item.kind === 'relax_nullability')
   const prior = history.slice(0, target)
-  const existing = tables.filter(name => name !== 'notification_dismissals')
+  const existing = tables.filter(name => !['notification_dismissals', 'admin_events'].includes(name))
   const { db, query } = migrationDb(existing, prior)
   await migrate(db)
   const writes = query.mock.calls.filter(([sql]) => /^(CREATE|ALTER|INSERT)/.test(sql))
@@ -227,4 +227,16 @@ it('roles y eliminaciones de bandeja generan SQL aditivo compatible y FK CASCADE
     const item = migrations.find(migration => migration.table === table && migration.kind === 'create_table')
     expect(item.columns().user_id.onDelete).toBe('CASCADE')
   }
+})
+
+it('prepara estado de cuenta y auditoría sin borrar datos ni retener objetivos eliminados', () => {
+  const status = migrations.find(item => item.name === '202610120003-add-users-status.js')
+  expect(status.kind).toBe('add_columns')
+  expect(status.columns().status.type.values).toEqual(['active', 'suspended'])
+  expect(status.columns().status.defaultValue).toBe('active')
+  const events = migrations.find(item => item.table === 'admin_events')
+  const sql = createTableSql(sequelize, events.table, events.columns(), events.indexes)
+  expect(sql).toContain('ON DELETE SET NULL')
+  expect(sql).toContain('ENGINE=InnoDB')
+  expect(sql).not.toMatch(/password|email|DROP|TRUNCATE/)
 })

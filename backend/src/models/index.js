@@ -15,6 +15,11 @@ import { Task } from './Task.js'
 import { TaskNote } from './TaskNote.js'
 import { Teacher } from './Teacher.js'
 import { User } from './User.js'
+import { AdminEvent } from './AdminEvent.js'
+
+AdminEvent.belongsTo(User, { foreignKey: 'actor_id', as: 'actor', onDelete: 'SET NULL' })
+AdminEvent.belongsTo(User, { foreignKey: 'target_id', as: 'target', onDelete: 'SET NULL' })
+export { AdminEvent }
 
 User.hasOne(Profile, { foreignKey: 'user_id', as: 'profile', onDelete: 'CASCADE' })
 Profile.belongsTo(User, { foreignKey: 'user_id', as: 'user' })

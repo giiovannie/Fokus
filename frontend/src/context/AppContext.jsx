@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../hooks/useAuth.js'
 import { ApiError } from '../services/api.js'
 import { createExam, deleteExam, getExams, updateExam, updateExamGrade } from '../services/exams.service.js'
-import { getNotifications, dismissNotification } from '../services/notifications.service.js'
+import { getNotifications, dismissNotification, dismissAllNotifications } from '../services/notifications.service.js'
 import { createProfile, getProfile, updateProfile as updateProfileRequest, uploadProfileAvatar } from '../services/profiles.service.js'
 import { createStudyActivity, getStudyActivities, updateStudyActivityStatus } from '../services/study-activities.service.js'
 import { createSubject, deleteSubject, getSubjects, updateSubject } from '../services/subjects.service.js'
@@ -49,7 +49,7 @@ export const AppProvider = ({ children }) => {
   const loadData = useCallback(async () => {
     const currentLoadId = ++loadId.current
 
-    if (!user) {
+    if (!user || user.role === 'superadmin') {
       setData(emptyData)
       setError(null)
       setIsLoading(false)
@@ -209,6 +209,9 @@ export const AppProvider = ({ children }) => {
     }, collection)
   }, [runMutation])
 
+  const removeAllNotifications = useCallback(() => runMutation(dismissAllNotifications,
+    current => ({ ...current, notifications: [] })), [runMutation])
+
   const updateProfile = useCallback((profile) => {
     const request = data.profile.id
       ? () => updateProfileRequest(data.profile.id, profile)
@@ -245,9 +248,10 @@ export const AppProvider = ({ children }) => {
     addItem,
     updateItem,
     removeItem,
+    removeAllNotifications,
     updateProfile,
     uploadProfileImage,
-  }), [data, toast, isLoading, error, loadData, refreshNotifications, notify, addItem, updateItem, removeItem, updateProfile, uploadProfileImage])
+  }), [data, toast, isLoading, error, loadData, refreshNotifications, notify, addItem, updateItem, removeItem, removeAllNotifications, updateProfile, uploadProfileImage])
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
 }

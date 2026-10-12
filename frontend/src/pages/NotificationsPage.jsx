@@ -7,7 +7,7 @@ import { useAppData } from '../hooks/useAppData.js'
 import { formatDate } from '../utils/date.js'
 const icons = { exam: '◫', task: '✓', study_activity: '◎' }
 const NotificationsPage = () => {
-  const { data, updateItem, removeItem, notify, refreshNotifications } = useAppData()
+  const { data, updateItem, removeItem, removeAllNotifications, notify, refreshNotifications } = useAppData()
   const [selected, setSelected] = useState(null), [busy, setBusy] = useState(false), [error, setError] = useState(null)
   useEffect(() => { refreshNotifications() }, [refreshNotifications])
   const unread = data.notifications.filter(({ read }) => !read).length
@@ -16,14 +16,14 @@ const NotificationsPage = () => {
     event.preventDefault(); if (busy || !selected) return
     setBusy(true); setError(null)
     try {
-      if (await removeItem('notifications', selected.id)) setSelected(null)
+      if (await (selected.all ? removeAllNotifications() : removeItem('notifications', selected.id))) { setSelected(null); notify(selected.all ? 'Todas las notificaciones fueron eliminadas.' : 'Notificaci?n eliminada.') }
       else setError('No se pudo eliminar la notificación. Volvé a intentar.')
     } catch { setError('No se pudo eliminar la notificación. Volvé a intentar.') }
     finally { setBusy(false) }
   }
   return <>
     <PageHeader eyebrow="Actividad" title="Notificaciones" description={`${unread} notificaciones sin leer`}>
-      <div className="d-flex flex-wrap gap-2"><Link className="btn btn-primary" to="/notifications/preferences">Configurar recordatorios</Link>{unread > 0 && <button className="btn btn-outline-primary" onClick={markAll} type="button">Marcar todas como leídas</button>}</div>
+      <div className="d-flex flex-wrap gap-2"><Link className="btn btn-primary" to="/notifications/preferences">Configurar recordatorios</Link>{unread > 0 && <button className="btn btn-outline-primary" onClick={markAll} type="button">Marcar todas como leídas</button>}{data.notifications.length > 0 && <button className="btn btn-outline-danger" type="button" onClick={() => { setError(null); setSelected({ all: true }) }}>Eliminar todas</button>}</div>
     </PageHeader>
     <div className="notifications-list">
       {data.notifications.length === 0 ? <EmptyState title="Todo al día" message="No tenés notificaciones nuevas." /> : data.notifications.map(notification => <article className={`notification-card ${notification.read ? '' : 'is-unread'}`} key={notification.id}>
@@ -36,7 +36,7 @@ const NotificationsPage = () => {
         <button className="btn btn-sm btn-outline-secondary notification-delete" type="button" aria-label={'Eliminar notificación: ' + notification.message} onClick={() => { setError(null); setSelected(notification) }}><span aria-hidden="true">×</span></button>
       </article>)}
     </div>
-    <FormModal open={!!selected} title="Eliminar notificación" danger formId="dismiss-notification-form" submitLabel="Eliminar" busy={busy} error={error} onClose={() => setSelected(null)}><form id="dismiss-notification-form" onSubmit={remove}>{selected && <p className="notification-message text-secondary">{selected.message}</p>}<p className="mb-0">Se quitará de tu bandeja. No se borrarán el examen o la tarea, ni se cancelarán futuros recordatorios.</p></form></FormModal>
+    <FormModal open={!!selected} title="Eliminar notificación" danger formId="dismiss-notification-form" submitLabel="Eliminar" busy={busy} error={error} onClose={() => setSelected(null)}><form id="dismiss-notification-form" onSubmit={remove}>{selected && !selected.all && <p className="notification-message text-secondary">{selected.message}</p>}<p className="mb-0">Se quitará de tu bandeja. No se borrarán el examen o la tarea, ni se cancelarán futuros recordatorios.</p></form></FormModal>
   </>
 }
 export { NotificationsPage }

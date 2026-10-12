@@ -7,7 +7,7 @@ import {
   updateTask,
   updateTaskStatus,
 } from '../controllers/task.controller.js'
-import { authenticate } from '../middlewares/auth.middleware.js'
+import { authenticate, requireStudent } from '../middlewares/auth.middleware.js'
 import { validateRequest } from '../middlewares/validate.middleware.js'
 import {
   createTaskValidator,
@@ -20,7 +20,7 @@ import { noteBodyValidator, taskNoteTaskIdValidator } from '../validators/taskNo
 
 const router = Router()
 
-router.use(authenticate)
+router.use(authenticate, requireStudent)
 router.get('/', getTasks)
 router.get('/:taskId/notes', taskNoteTaskIdValidator, validateRequest, getTaskNotes)
 router.post('/:taskId/notes', taskNoteTaskIdValidator, noteBodyValidator, validateRequest, createTaskNote)

@@ -101,6 +101,14 @@ export const dismissNotification = async (req, res, next) => {
   } catch (error) { return next(error) }
 }
 
+export const dismissAllNotifications = async (req, res, next) => {
+  try {
+    const notifications = await buildInbox(req.user.id)
+    if (notifications.length) await NotificationDismissal.bulkCreate(notifications.map(item => ({ user_id: req.user.id, notification_key: item.id })), { ignoreDuplicates: true })
+    return res.status(204).end()
+  } catch (error) { return next(error) }
+}
+
 // Vista previa autenticada: consultas de lectura, sin entrega ni planificación.
 export const createNotificationPreview = async (userId, input) => {
   const { event_type: type, style, unfiltered_consent: consent, previous_phrase: previousText, selected_phrase: selectedText } = input
