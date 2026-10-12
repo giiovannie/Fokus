@@ -1214,3 +1214,51 @@ No implementa aún planificador, reintentos ni envío automático de próximos e
 ## Procesamiento interno de recordatorios (preparado, deshabilitado)
 
 `POST /api/internal/notifications/process` acepta únicamente cuerpo vacío/`{}` y autenticación Bearer de servicio mediante `NOTIFICATION_SERVICE_TOKEN`; el JWT estudiantil no autoriza esta operación. Requiere habilitación explícita `NOTIFICATION_WORKER_ENABLED=true`, VAPID y migraciones vigentes. Responde contadores agregados o `{ "skipped": "busy" }`; errores 401 (servicio no autorizado), 400 (parámetros no admitidos), 429 (límite), 503 (deshabilitado/configuración). No permite elegir usuarios ni modificar el tamaño del lote. Véase `WEB-PUSH-REMINDERS.md`.
+
+
+## Gestión de cuentas, administración y bandeja (rama de implementación)
+
+Requiere migraciones 20 y 21 preparadas, todavía sin ejecutar. El registro siempre crea
+un usuario `student`, incluso si recibe un campo `role` o el correo del administrador.
+Login devuelve `user: { id, email, role }`; la autorización verifica existencia y rol
+actuales en la base en cada petición. Un JWT de una cuenta eliminada recibe 401.
+
+- `DELETE /api/users/me`: JWT, contraseña actual (`password`) y
+  `confirmation: "ELIMINAR"`. No acepta un identificador de otro usuario.
+  Devuelve 204 únicamente tras confirmar la transacción; 400 por confirmación inválida,
+  403 por contraseña incorrecta y 409 si el worker está ocupado o hay relaciones
+  inconsistentes/una foto cuya propiedad no se puede verificar. Limitado por usuario.
+  Borra datos propios y fotos del espacio de nombres verificado del usuario, sin alterar respaldos del proveedor. Las subidas de avatar comparten el bloqueo de cuenta.
+  Comparte el bloqueo existente del worker. La foto externa no participa de la
+  transacción SQL: si su retiro ocurrió antes de un fallo SQL, no afirmar éxito;
+  la cuenta conserva sus registros y se puede reintentar la eliminación idempotente.
+- `GET /api/admin/statistics`: JWT y rol real `superadmin`. Devuelve únicamente
+  `totals` (users/subjects/tasks/exams), registros en 7 días, usuarios con cambios
+  académicos en 7 días, definición de esa actividad, 30 conteos diarios de registros,
+  zona UTC y fecha de cálculo. No informa visitas/logins ni datos personales.
+- `GET /api/notifications`: conserva mensajes y devuelve además `date`; `id` pasa
+  a ser una clave opaca estable (SHA-256) por usuario, tipo, evento y fecha.
+  La bandeja sigue siendo una proyección de eventos próximos; no se presenta como
+  un historial de recepción del proveedor Push. Omite los avisos eliminados.
+- `DELETE /api/notifications/:id`: JWT y clave propia. Devuelve 204 idempotente,
+  400 para formato inválido y 404 si no pertenece a la bandeja del usuario.
+  Guarda la eliminación sin borrar eventos ni cambiar futuros recordatorios.
+  El mismo evento con una fecha nueva representa otro aviso; cambios de orden
+  o personalidad no reintroducen el aviso eliminado.
+
+### Habilitación controlada del superadministrador
+
+Comprobar manualmente identidad y titularidad del correo aprobado, obtener el ID
+existente y usar una conexión operativa autorizada con variables solo en el proceso.
+El ejecutor no carga `.env`. No asigna roles durante el registro ni se ejecuta al arrancar.
+Después de las migraciones autorizadas:
+
+```powershell
+node scripts/grant-superadmin.js --user-id <ID_VERIFICADO> --identity-verified --confirm
+```
+
+En producción o un host remoto requiere además `--confirm-production` y TLS verificado.
+Solicita la contraseña actual de esa cuenta en una terminal interactiva, sin eco ni logs.
+El operador debe verificar previamente el control del correo: el login actual no prueba
+por sí solo su titularidad. Volver a iniciar sesión para actualizar la navegación.
+No se ejecutó este procedimiento ni se concedieron privilegios en producción.

@@ -63,9 +63,14 @@ const readState = async (query, migrations) => {
     const expected = Object.keys(item.columns())
     const present = expected.filter(name => fields.some(field => field.Field === name))
     if (index < applied.length) {
-      if (present.length !== expected.length || fields.some(field => expected.includes(field.Field) &&
-        (field.Type.toLowerCase() !== 'time' || field.Null !== 'YES' || field.Default !== null))) {
-        throw new MigrationError('Las columnas de una migración aplicada no coinciden con el esquema esperado')
+      if (present.length !== expected.length) throw new MigrationError('Las columnas de una migración aplicada no coinciden con el esquema esperado')
+      for (const [name, column] of Object.entries(item.columns())) {
+        const field = fields.find(value => value.Field === name)
+        const type = column.type.key === 'TIME' ? 'time' : column.type.key === 'ENUM'
+          ? 'enum(' + column.type.values.map(value => "'" + value + "'").join(',') + ')' : null
+        if (!type || field.Type.toLowerCase() !== type || field.Null !== (column.allowNull ? 'YES' : 'NO') || field.Default !== (column.defaultValue ?? null)) {
+          throw new MigrationError('Las columnas de una migración aplicada no coinciden con el esquema esperado')
+        }
       }
     } else if (present.length) throw new MigrationError('Migración parcial de columnas sin historial válido')
   }

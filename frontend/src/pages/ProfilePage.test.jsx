@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen, within, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -61,6 +61,7 @@ describe('foto de perfil', () => {
     await screen.findByText('Perfil actualizado.')
     for (const avatar of screen.getAllByAltText('Foto de perfil')) expect(avatar).toHaveAttribute('src', newUrl)
     await user.click(screen.getByRole('button', { name: 'Cerrar sesión' }))
+    await user.click(within(screen.getByRole('dialog', { name: 'Cerrar sesión' })).getByRole('button', { name: 'Cerrar sesión' }))
     expect(window.localStorage.getItem('task-organization-session')).toBeNull()
     view.unmount()
     saveSession({ user: { id: 7, email: 'test@example.com' }, token: 'test-only' })

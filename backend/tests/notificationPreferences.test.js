@@ -18,7 +18,7 @@ const ruleRow = data => ({ id: nextId++, ...data,
 beforeEach(() => {
   prefs = null; rules = []; nextId = 1
   vi.spyOn(sequelize, 'transaction').mockImplementation(fn => fn(transaction))
-  vi.spyOn(User, 'findByPk').mockResolvedValue({ id: 7 })
+  vi.spyOn(User, 'findByPk').mockImplementation(async id => ({ id, role: 'student' }))
   vi.spyOn(NotificationPreference, 'findOne').mockImplementation(async () => prefs)
   vi.spyOn(NotificationPreference, 'findOrCreate').mockImplementation(async () => { if (!prefs) prefs = preferenceRow({}); return [prefs] })
   vi.spyOn(NotificationRule, 'findAll').mockImplementation(async ({ where }) => rules.filter(row => row.user_id === where.user_id && (!where.event_type || row.event_type === where.event_type)))

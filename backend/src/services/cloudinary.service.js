@@ -54,3 +54,25 @@ export const getOwnedAvatarId = (url, userId, profileId) => {
   const match = path.match(new RegExp(`^(fokus/avatars/${Number(userId)}/${Number(profileId)}/[0-9a-f-]{36})\\.webp$`))
   return match?.[1] ?? null
 }
+
+// Solo el espacio de nombres generado por Fokus para este usuario, nunca un prefijo del cliente.
+export const deleteAccountAvatars = async (userId, { required = false } = {}) => {
+  if (!Number.isSafeInteger(userId) || userId < 1) throw createHttpError(400, 'El usuario no es válido')
+  const configured = ['CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET'].some(key => process.env[key])
+  if (!configured && !required) return
+  configureCloudinary()
+  let cursor
+  try {
+    // Límite acotado; un resultado parcial nunca se declara terminado.
+    for (let page = 0; page < 3; page++) {
+      const result = await cloudinary.api.delete_resources_by_prefix('fokus/avatars/' + userId + '/', {
+        resource_type: 'image', type: 'upload', invalidate: true, timeout: 30000, ...(cursor ? { next_cursor: cursor } : {}),
+      })
+      if (!result?.deleted || Object.values(result.deleted).some(status => !['deleted', 'not_found'].includes(status))) throw new Error('Incomplete cleanup')
+      if (result.partial === false) return
+      if (result.partial !== true || typeof result.next_cursor !== 'string' || !result.next_cursor) throw new Error('Incomplete cleanup')
+      cursor = result.next_cursor
+    }
+  } catch { throw createHttpError(503, 'No se pudo completar la limpieza de fotos. Volvé a intentar antes de eliminar la cuenta.') }
+  throw createHttpError(503, 'La limpieza de fotos quedó parcial. Volvé a intentar antes de eliminar la cuenta.')
+}

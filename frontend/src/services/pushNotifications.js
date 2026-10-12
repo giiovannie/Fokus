@@ -136,3 +136,20 @@ export const cleanupPushOnLogout = async () => {
   }
   window.localStorage.removeItem(OWNER_KEY)
 }
+
+// La cuenta ya se borró en el servidor: no intentar bajas con su JWT revocado.
+export const cleanupPushAfterAccountDeletion = async userId => {
+  const stillOwnSession = () => !getSession() || getSession().user.id === userId
+  if (!stillOwnSession()) return
+  try {
+    const registration = await navigator.serviceWorker?.getRegistration?.()
+    if (!stillOwnSession()) return
+    for (const notice of await registration?.getNotifications?.() || []) {
+      if (!stillOwnSession()) return
+      if (notice.data?.source === 'fokus' || notice.data?.test === true) notice.close()
+    }
+    const subscription = await registration?.pushManager?.getSubscription()
+    if (stillOwnSession()) await subscription?.unsubscribe()
+  } catch { /* No quedan suscripciones del usuario eliminado en el backend. */ }
+  if (stillOwnSession()) window.localStorage.removeItem(OWNER_KEY)
+}

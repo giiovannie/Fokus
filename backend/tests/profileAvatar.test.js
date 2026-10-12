@@ -1,3 +1,4 @@
+import { User as AuthUser } from '../src/models/User.js'
 import request from 'supertest'
 import sharp from 'sharp'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -19,6 +20,7 @@ describe('subida de avatar del perfil', () => {
   let profile
   beforeEach(() => {
     vi.resetAllMocks()
+    vi.spyOn(AuthUser, 'findByPk').mockImplementation(async id => ({ id, role: 'student' }))
     profile = {
       id: 2, user_id: 1, name: 'Ana', last_name: 'Pérez', nickname: '', avatar_url: null,
       update: vi.fn(async (changes) => Object.assign(profile, changes)),
@@ -117,7 +119,7 @@ describe('subida de avatar del perfil', () => {
   })
 
   it('elimina la nueva imagen cuando falla la confirmación de la transacción', async () => {
-    sequelize.transaction.mockRejectedValue(new Error('transaction failed'))
+    sequelize.transaction.mockImplementation(async callback => { await callback({ LOCK: { UPDATE: 'UPDATE' } }); throw new Error('transaction failed') })
     expect((await sendAvatar(await imageBuffer())).status).toBe(500)
     expect(deleteAvatar).toHaveBeenCalledExactlyOnceWith('new-image')
   })
@@ -166,4 +168,15 @@ describe('subida de avatar del perfil', () => {
     expect(updated.status).toBe(200)
     expect(uploadAvatar).not.toHaveBeenCalled()
   })
+})
+
+it('no sube una foto si la cuenta desapareció antes del bloqueo', async () => {
+  vi.clearAllMocks()
+  vi.spyOn(AuthUser, 'findByPk').mockResolvedValueOnce({ id: 1 }).mockResolvedValueOnce(null)
+  vi.spyOn(Profile, 'findOne').mockResolvedValue({ id: 2, user_id: 1 })
+  vi.spyOn(sequelize, 'transaction').mockImplementation(async callback => callback({ LOCK: { UPDATE: 'UPDATE' } }))
+  const result = await request(app).post('/api/profiles/2/avatar').set('Authorization', 'Bearer test-only').attach('avatar', await imageBuffer(), { filename: 'image.png', contentType: 'image/png' })
+  expect(result.status).toBe(404)
+  expect(uploadAvatar).not.toHaveBeenCalled()
+  vi.restoreAllMocks()
 })

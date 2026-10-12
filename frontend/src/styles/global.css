@@ -258,20 +258,9 @@ a {
 .notification-icon { flex: 0 0 auto; width: 2.5rem; height: 2.5rem; }
 .empty-icon { width: 3rem; height: 3rem; margin-inline: auto; font-size: 1.4rem; }
 
-.notification-row {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 1rem;
-  border: 0;
-  border-bottom: 1px solid var(--border-subtle);
-  background: transparent;
-}
 
-.notification-row.is-unread {
-  border-radius: 0.75rem;
-  background: var(--bg-unread);
-}
+
+
 
 .activity-check {
   width: 1.35rem;
@@ -305,7 +294,7 @@ a {
   .task-card .status-select { width: 100%; }
   .task-card .d-flex.flex-wrap.align-content-start { width: 100%; }
   .task-card .btn-sm { min-height: 2.4rem; }
-  .notification-row { align-items: flex-start; padding-inline: 0.75rem; }
+
   .input-group { flex-wrap: wrap; }
   .input-group > .form-control { min-width: 10rem; }
   .app-toast { right: 1rem; bottom: 1rem; left: 1rem; min-width: 0; }
@@ -415,22 +404,22 @@ a {
 .form-modal .modal-footer .btn { min-height: 2.75rem; min-width: 6rem; }
 .form-modal .modal-footer [role="status"] { margin-right: auto; font-size: 0.875rem; color: var(--text-secondary); }
 .notifications-list { padding: 0.5rem; }
-.notification-row { align-items: flex-start; gap: 0.75rem; padding: 0.75rem 1rem; color: var(--text-main); border-radius: 0.5rem; }
+
 .notification-row:last-child { border-bottom: 0; }
-.notification-row:hover { background: var(--bg-highlight); }
-.notification-row:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }
+
+
 .notification-icon { width: 2rem; height: 2rem; border-radius: 0.5rem; }
 .notification-content { flex: 1; min-width: 0; }
 .notification-message { display: block; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.45; }
 .notification-title { font-size: 0.9375rem; font-weight: 600; }
 .notification-details { font-size: 0.8125rem; color: var(--text-secondary); font-weight: 400; }
 .notification-status { display: block; margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-secondary); }
-.notification-row.is-unread .notification-status { color: var(--color-primary); }
+.notification-card.is-unread .notification-status { color: var(--color-primary); }
 @media (max-width: 575px) {
   .form-modal { width: calc(100% - 1rem); max-height: calc(100dvh - 1rem); }
   .form-modal .modal-content { max-height: calc(100dvh - 1rem); }
   .form-modal .modal-header, .form-modal .modal-body, .form-modal .modal-footer { padding: 1rem; }
-  .notification-row { padding: 0.75rem; gap: 0.625rem; }
+
 }
 .no-due-date-control .form-check-input { border-radius: 50%; }
 
@@ -456,3 +445,14 @@ a {
 @media (prefers-reduced-motion: reduce) {
   .owl-welcome, .owl-loading, .loading-dots span { animation: none; transform: none; }
 }
+
+.notification-card { display: flex; gap: 0.75rem; align-items: flex-start; padding: 1rem; margin-bottom: 0.75rem; border: 1px solid var(--border-subtle); border-radius: 0.75rem; background: var(--bg-card); }
+.notification-card.is-unread { border-left: 3px solid var(--color-primary); background: var(--bg-unread); }
+.notification-open { display: flex; align-items: flex-start; flex: 1; gap: 0.75rem; min-width: 0; padding: 0; border: 0; background: transparent; color: var(--text-main); text-align: left; }
+.notification-open:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 4px; border-radius: 0.25rem; }
+.notification-delete { flex-shrink: 0; min-width: 2.25rem; min-height: 2.25rem; }
+.exam-grade-summary { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem; padding: 0.875rem; border: 1px solid var(--border-subtle); border-radius: 0.5rem; background: var(--bg-highlight); }
+.admin-registration-chart { width: 100%; height: auto; max-height: 15rem; color: var(--color-primary); }
+@media (max-width: 575px) { .notification-card { padding: 0.875rem; gap: 0.5rem; } }
+
+.notification-card:hover { background: var(--bg-highlight); }

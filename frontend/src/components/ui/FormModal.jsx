@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef } from 'react'
 import { createPortal } from 'react-dom'
 
-export const FormModal = ({ open, title, onClose, busy = false, error, formId, submitLabel, children }) => {
+export const FormModal = ({ open, title, onClose, busy = false, error, formId, submitLabel, danger = false, children }) => {
   const dialog = useRef(null)
   const titleId = useId()
   useEffect(() => {
@@ -23,7 +23,7 @@ export const FormModal = ({ open, title, onClose, busy = false, error, formId, s
     <div className="modal-content">
       <div className="modal-header"><h2 className="modal-title h5" id={titleId}>{title}</h2><button className="btn-close" type="button" aria-label="Cerrar formulario" disabled={busy} onClick={onClose} /></div>
       <div className="modal-body">{error && <p className="alert alert-danger" role="alert">{error}</p>}<fieldset disabled={busy}>{children}</fieldset></div>
-      <div className="modal-footer">{busy && <span role="status">Guardando…</span>}<button className="btn btn-outline-secondary" type="button" disabled={busy} onClick={onClose}>Cancelar</button>{formId && <button className="btn btn-primary" type="submit" form={formId} disabled={busy}>{submitLabel ?? title}</button>}</div>
+      <div className="modal-footer">{busy && <span role="status">Guardando…</span>}<button className="btn btn-outline-secondary" type="button" disabled={busy} onClick={onClose}>Cancelar</button>{formId && <button className={'btn btn-' + (danger ? 'danger' : 'primary')} type="submit" form={formId} disabled={busy}>{submitLabel ?? title}</button>}</div>
     </div>
   </dialog>, document.body)
 }

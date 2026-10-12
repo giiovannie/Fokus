@@ -1,3 +1,5 @@
+import { AdminRoute } from './AdminRoute.jsx'
+import { AdminDashboardPage } from '../pages/AdminDashboardPage.jsx'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { MainLayout } from '../layouts/MainLayout.jsx'
 import { AuthLayout } from '../layouts/AuthLayout.jsx'
@@ -22,6 +24,7 @@ const AppRoutes = () => (
     </Route>
     <Route element={<ProtectedRoute />}>
       <Route element={<MainLayout />}>
+        <Route element={<AdminRoute />}><Route path="admin" element={<AdminDashboardPage />} /></Route>
         <Route index element={<DashboardPage />} />
         <Route path="subjects" element={<SubjectsPage />} />
         <Route path="tasks" element={<TasksPage />} />

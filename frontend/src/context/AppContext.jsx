@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../hooks/useAuth.js'
 import { ApiError } from '../services/api.js'
 import { createExam, deleteExam, getExams, updateExam, updateExamGrade } from '../services/exams.service.js'
-import { getNotifications } from '../services/notifications.service.js'
+import { getNotifications, dismissNotification } from '../services/notifications.service.js'
 import { createProfile, getProfile, updateProfile as updateProfileRequest, uploadProfileAvatar } from '../services/profiles.service.js'
 import { createStudyActivity, getStudyActivities, updateStudyActivityStatus } from '../services/study-activities.service.js'
 import { createSubject, deleteSubject, getSubjects, updateSubject } from '../services/subjects.service.js'
@@ -179,6 +179,7 @@ export const AppProvider = ({ children }) => {
 
   const removeItem = useCallback((collection, id) => {
     const requests = {
+      notifications: () => dismissNotification(id),
       subjects: () => deleteSubject(id),
       tasks: () => deleteTask(id),
       notes: () => deleteTaskNote(id),

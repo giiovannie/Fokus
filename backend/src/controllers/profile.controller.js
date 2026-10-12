@@ -1,4 +1,4 @@
-import { Profile, sequelize } from '../models/index.js'
+import { Profile, User, sequelize } from '../models/index.js'
 import { deleteAvatar, getOwnedAvatarId, uploadAvatar } from '../services/cloudinary.service.js'
 import { createHttpError } from '../utils/httpError.js'
 import { pick } from '../utils/pick.js'
@@ -10,13 +10,16 @@ export const updateProfileAvatar = async (req, res, next) => {
   let savedProfile
   let previousUrl
   try {
-    uploaded = await uploadAvatar(req.avatarBuffer, req.user.id, req.profile.id)
     await sequelize.transaction(async (transaction) => {
+      // Compartir el bloqueo de cuenta con el borrado evita subir fotos después del retiro.
+      const user = await User.findByPk(req.user.id, { transaction, lock: transaction.LOCK.UPDATE })
+      if (!user) throw createHttpError(404, 'El usuario no fue encontrado')
       // Re-read under lock so simultaneous uploads replace the actual current avatar.
       savedProfile = await Profile.findOne({
         where: { id: req.profile.id, user_id: req.user.id }, transaction, lock: transaction.LOCK.UPDATE,
       })
       if (!savedProfile) throw createHttpError(404, 'El perfil no fue encontrado')
+      uploaded = await uploadAvatar(req.avatarBuffer, req.user.id, savedProfile.id)
       previousUrl = savedProfile.avatar_url
       await savedProfile.update({ avatar_url: uploaded.url }, { transaction })
     })
