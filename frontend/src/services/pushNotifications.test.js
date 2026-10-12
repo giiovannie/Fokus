@@ -1,11 +1,13 @@
+import { webcrypto } from 'node:crypto'
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
-import { activatePush, cleanupPushOnLogout, deactivatePush, getPushDeviceId } from './pushNotifications.js'
+import { activatePush, cleanupPushOnLogout, deactivatePush, getPushDeviceId, synchronizePush } from './pushNotifications.js'
 import { savePushSubscription, deletePushSubscription } from './notifications.service.js'
 import { saveSession } from '../utils/authSession.js'
 vi.mock('./notifications.service.js', () => ({ savePushSubscription: vi.fn(), deletePushSubscription: vi.fn() }))
 let subscription, registration, notification
 const publicKey = btoa(String.fromCharCode(...new Uint8Array(65).fill(4))).replace(/=/g, '')
 beforeEach(() => {
+  vi.stubGlobal('crypto', webcrypto)
   localStorage.clear(); saveSession({ token: 'test', user: { id: 7 } })
   subscription = { toJSON: vi.fn().mockReturnValue({ endpoint: 'https://fcm.googleapis.com/test', keys: { p256dh: 'test', auth: 'test' } }), unsubscribe: vi.fn().mockResolvedValue(true) }
   registration = { active: {}, pushManager: { getSubscription: vi.fn().mockResolvedValue(null), subscribe: vi.fn().mockResolvedValue(subscription) } }
@@ -24,7 +26,7 @@ describe('activación voluntaria de Web Push', () => {
     expect(registration.pushManager.subscribe).toHaveBeenCalledWith({ userVisibleOnly: true, applicationServerKey: expect.any(Uint8Array) })
     expect(savePushSubscription).toHaveBeenCalledWith({ device_id: getPushDeviceId(), device_label: 'Mi PC', subscription: subscription.toJSON() })
     expect(result.id).toBe(12)
-    expect(JSON.parse(localStorage.getItem('fokus-push-owner'))).toEqual({ id: 12, user_id: 7 })
+    expect(JSON.parse(localStorage.getItem('fokus-push-owner'))).toEqual(expect.objectContaining({ id: 12, user_id: 7, fingerprint: expect.any(String) }))
   })
   it('rechaza permiso denegado sin registrar ni guardar suscripción', async () => {
     notification.requestPermission.mockResolvedValue('denied')
@@ -106,4 +108,75 @@ describe('activación voluntaria de Web Push', () => {
     await expect(activatePush(publicKey, 'Mi PC')).rejects.toThrow('Otra cuenta')
     expect(subscription.unsubscribe).toHaveBeenCalledOnce()
   })
+})
+
+describe('reconciliación sin pedir permiso ni suscribir automáticamente', () => {
+  it('conserva la suscripción existente y su vínculo sin duplicar solicitudes', async () => {
+    notification.permission = 'granted'
+    registration.pushManager.getSubscription.mockResolvedValue(subscription)
+    await activatePush(publicKey, 'Mi PC')
+    vi.clearAllMocks()
+    const device = { id: 12, device_id: getPushDeviceId(), device_label: 'Mi PC' }
+    expect(await synchronizePush(publicKey, [device])).toBe(device)
+    expect(savePushSubscription).not.toHaveBeenCalled()
+    expect(subscription.unsubscribe).not.toHaveBeenCalled()
+    expect(registration.pushManager.subscribe).not.toHaveBeenCalled()
+    expect(notification.requestPermission).not.toHaveBeenCalled()
+  })
+  it('recupera un vínculo backend perdido utilizando la suscripción ya autorizada', async () => {
+    notification.permission = 'granted'
+    registration.pushManager.getSubscription.mockResolvedValue(subscription)
+    expect((await synchronizePush(publicKey, [])).id).toBe(12)
+    expect(savePushSubscription).toHaveBeenCalledOnce()
+    expect(registration.pushManager.subscribe).not.toHaveBeenCalled()
+    expect(notification.requestPermission).not.toHaveBeenCalled()
+  })
+  it.each(['default', 'denied'])('respeta permiso %s sin nuevas altas y elimina el vínculo revocado', async permission => {
+    notification.permission = permission
+    registration.pushManager.getSubscription.mockResolvedValue(subscription)
+    expect(await synchronizePush(publicKey, [{ id: 12, device_id: getPushDeviceId() }])).toBeNull()
+    expect(deletePushSubscription).toHaveBeenCalledWith(12)
+    expect(subscription.unsubscribe).toHaveBeenCalledOnce()
+    expect(registration.pushManager.subscribe).not.toHaveBeenCalled()
+    expect(notification.requestPermission).not.toHaveBeenCalled()
+  })
+  it('un permiso concedido sin suscripción no inicia una nueva sin acción del usuario', async () => {
+    notification.permission = 'granted'
+    expect(await synchronizePush(publicKey, [])).toBeNull()
+    expect(registration.pushManager.subscribe).not.toHaveBeenCalled()
+    expect(savePushSubscription).not.toHaveBeenCalled()
+    expect(notification.requestPermission).not.toHaveBeenCalled()
+  })
+  it('no reasigna la suscripción de otra cuenta', async () => {
+    notification.permission = 'granted'
+    localStorage.setItem('fokus-push-owner', JSON.stringify({ id: 13, user_id: 8 }))
+    registration.pushManager.getSubscription.mockResolvedValue(subscription)
+    expect(await synchronizePush(publicKey, [])).toBeNull()
+    expect(subscription.unsubscribe).toHaveBeenCalledOnce()
+    expect(deletePushSubscription).not.toHaveBeenCalled()
+    expect(savePushSubscription).not.toHaveBeenCalled()
+    expect(registration.pushManager.subscribe).not.toHaveBeenCalled()
+  })
+})
+
+it('reconcilia un endpoint renovado sin crear otra suscripción', async () => {
+  notification.permission = 'granted'
+  registration.pushManager.getSubscription.mockResolvedValue(subscription)
+  await activatePush(publicKey, 'Mi PC')
+  subscription.toJSON.mockReturnValue({ endpoint: 'https://fcm.googleapis.com/renewed', keys: { p256dh: 'test', auth: 'test' } })
+  vi.clearAllMocks()
+  await synchronizePush(publicKey, [{ id: 12, device_id: getPushDeviceId(), device_label: 'Mi PC' }])
+  expect(savePushSubscription).toHaveBeenCalledWith(expect.objectContaining({ device_label: 'Mi PC', subscription: subscription.toJSON() }))
+  expect(registration.pushManager.subscribe).not.toHaveBeenCalled()
+  expect(notification.requestPermission).not.toHaveBeenCalled()
+})
+
+it('no conserva una suscripción caducada ni genera otra silenciosamente', async () => {
+  notification.permission = 'granted'
+  subscription.expirationTime = Date.now() - 1000
+  registration.pushManager.getSubscription.mockResolvedValue(subscription)
+  expect(await synchronizePush(publicKey, [{ id: 12, device_id: getPushDeviceId() }])).toBeNull()
+  expect(subscription.unsubscribe).toHaveBeenCalledOnce()
+  expect(deletePushSubscription).toHaveBeenCalledWith(12)
+  expect(registration.pushManager.subscribe).not.toHaveBeenCalled()
 })

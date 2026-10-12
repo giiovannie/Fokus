@@ -3,6 +3,10 @@ import { getSession } from '../utils/authSession.js'
 
 const DEVICE_KEY = 'fokus-push-device'
 const OWNER_KEY = 'fokus-push-owner'
+const fingerprint = async subscription => {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(subscription.toJSON())))
+  return Array.from(new Uint8Array(digest), value => value.toString(16).padStart(2, '0')).join('')
+}
 export const getPushDeviceId = () => {
   let id = window.localStorage.getItem(DEVICE_KEY)
   if (!id && typeof globalThis.crypto?.randomUUID !== 'function') return null
@@ -57,10 +61,49 @@ export const activatePush = async (publicKey, label) => {
   if (!subscription) subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: expectedKey })
   try {
     const saved = await savePushSubscription({ device_id: getPushDeviceId(), device_label: label.trim() || 'Este navegador', subscription: subscription.toJSON() })
-    window.localStorage.setItem(OWNER_KEY, JSON.stringify({ id: saved.id, user_id: userId }))
+    window.localStorage.setItem(OWNER_KEY, JSON.stringify({ id: saved.id, user_id: userId, fingerprint: await fingerprint(subscription) }))
     return saved
   } catch (error) {
     if (created || error.status === 409) await subscription.unsubscribe().catch(() => false)
+    throw error
+  }
+}
+// Sin gesto del usuario solo reconciliar una suscripción que ya existe.
+// Nunca pedir permiso ni crear otra suscripción en esta revisión.
+export const synchronizePush = async (publicKey, devices) => {
+  const userId = getSession()?.user.id
+  const own = devices.find(device => device.device_id === getPushDeviceId())
+  const permission = globalThis.Notification?.permission
+  const registration = await navigator.serviceWorker?.getRegistration?.()
+  const local = await registration?.pushManager?.getSubscription()
+  if (!userId) throw new Error('Iniciá sesión nuevamente para revisar las notificaciones.')
+  if (permission !== 'granted' || !local || (local.expirationTime && local.expirationTime <= Date.now())) {
+    if (own) await deactivatePush(own.id)
+    else if (local) {
+      if (!await local.unsubscribe()) throw new Error('No pudimos desvincular la suscripción anterior. Volvé a intentar.')
+      localStorage.removeItem(OWNER_KEY)
+    }
+    return null
+  }
+  let owner
+  try { owner = JSON.parse(localStorage.getItem(OWNER_KEY) || 'null') } catch { owner = null }
+  const expected = applicationKey(publicKey), key = local.options?.applicationServerKey
+  const differentKey = key && (key.byteLength !== expected.byteLength || new Uint8Array(key).some((value, index) => value !== expected[index]))
+  if ((owner && owner.user_id !== userId) || differentKey) {
+    if (!await local.unsubscribe()) throw new Error('No pudimos desvincular la suscripción anterior. Volvé a intentar.')
+    if (own) await deletePushSubscription(own.id)
+    localStorage.removeItem(OWNER_KEY)
+    return null
+  }
+  const currentFingerprint = await fingerprint(local)
+  if (own && owner?.id === own.id && owner.fingerprint === currentFingerprint) return own
+  // Recuperar en el backend el vínculo perdido, sin volver a suscribir el navegador.
+  try {
+    const saved = await savePushSubscription({ device_id: getPushDeviceId(), device_label: own?.device_label || 'Este navegador', subscription: local.toJSON() })
+    localStorage.setItem(OWNER_KEY, JSON.stringify({ id: saved.id, user_id: userId, fingerprint: currentFingerprint }))
+    return saved
+  } catch (error) {
+    if (error.status === 409) await local.unsubscribe().catch(() => false)
     throw error
   }
 }
