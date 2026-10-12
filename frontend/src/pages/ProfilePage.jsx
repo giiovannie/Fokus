@@ -1,3 +1,4 @@
+import { LogoutButton, AccountDangerZone } from '../components/common/AccountActions.jsx'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../components/ui/PageHeader.jsx'
@@ -7,7 +8,7 @@ import { useAuth } from '../hooks/useAuth.js'
 
 const ProfilePage = () => {
   const { data, updateProfile, uploadProfileImage, notify } = useAppData()
-  const { user, signOut } = useAuth()
+  const { user } = useAuth()
   const navigate = useNavigate()
   const [form, setForm] = useState(data.profile)
   const [file, setFile] = useState(null)
@@ -64,7 +65,7 @@ const ProfilePage = () => {
     <>
       <PageHeader eyebrow="Cuenta" title="Tu perfil" description="Personalizá cómo querés verte en Fokus." />
       <div className="row g-4">
-        <div className="col-12 col-lg-4"><div className="card border-0 text-center"><div className="card-body p-4"><Avatar profile={data.profile} className="profile-avatar mx-auto mb-3" /><h2 className="h5 mb-1">{form.name} {form.last_name}</h2><p className="text-secondary">@{form.nickname}</p><p className="small mb-4">{user?.email}</p><button className="btn btn-outline-danger" disabled={isSaving} onClick={async () => { setIsSaving(true); try { await signOut(); navigate('/login') } catch (error) { notify(error.message, 'error') } finally { setIsSaving(false) } }} type="button">Cerrar sesión</button></div></div></div>
+        <div className="col-12 col-lg-4"><div className="card border-0 text-center"><div className="card-body p-4"><Avatar profile={data.profile} className="profile-avatar mx-auto mb-3" /><h2 className="h5 mb-1">{form.name} {form.last_name}</h2><p className="text-secondary">@{form.nickname}</p><p className="small mb-4">{user?.email}</p><LogoutButton disabled={isSaving} /></div></div></div>
         <div className="col-12 col-lg-8"><div className="card border-0"><div className="card-body p-4 p-md-5"><h2 className="h5 mb-4">Información personal</h2><form onSubmit={submit}><fieldset disabled={isSaving}><div className="row g-3">
           {[['name', 'Nombre'], ['last_name', 'Apellido'], ['nickname', 'Apodo']].map(([field, label]) => <div className="col-12 col-md-6" key={field}><label className="form-label" htmlFor={`profile-${field}`}>{label}</label><input className="form-control" id={`profile-${field}`} value={form[field] ?? ''} onChange={(event) => setForm({ ...form, [field]: event.target.value })} /></div>)}
           <div className="col-12">
@@ -76,6 +77,7 @@ const ProfilePage = () => {
           <div className="col-12"><button className="btn btn-primary mt-2" type="submit">{isSaving ? 'Guardando…' : 'Guardar perfil'}</button></div>
         </div></fieldset>{isSaving && <p className="mt-3" role="status">Guardando el perfil y la foto seleccionada…</p>}{feedback && <p className={`mt-3 text-${feedback.error ? 'danger' : 'success'}`} role={feedback.error ? 'alert' : 'status'}>{feedback.message}</p>}</form></div></div></div>
       </div>
+      <AccountDangerZone />
     </>
   )
 }

@@ -21,3 +21,5 @@ export const getPushSubscriptions = () => apiRequest('/notifications/push/subscr
 export const savePushSubscription = values => apiRequest('/notifications/push/subscriptions', { method: 'POST', body: JSON.stringify(values) })
 export const deletePushSubscription = id => apiRequest('/notifications/push/subscriptions/' + id, { method: 'DELETE' })
 export const sendPushTest = (id, values) => apiRequest('/notifications/push/test/' + id, { method: 'POST', body: JSON.stringify(values) })
+
+export const dismissNotification = id => apiRequest('/notifications/' + encodeURIComponent(id), { method: 'DELETE' })

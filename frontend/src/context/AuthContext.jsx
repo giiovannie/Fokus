@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { cleanupPushOnLogout } from '../services/pushNotifications.js'
+import { cleanupPushOnLogout, cleanupPushAfterAccountDeletion } from '../services/pushNotifications.js'
 import { login } from '../services/auth.service.js'
 import { createUser } from '../services/users.service.js'
 import { clearSession, getSession, saveSession, SESSION_EXPIRED_EVENT, SESSION_EXPIRED_MESSAGE } from '../utils/authSession.js'
@@ -35,7 +35,17 @@ export const AuthProvider = ({ children }) => {
     setUser(null)
   }, [])
 
-  const value = useMemo(() => ({ user, sessionMessage, signIn, signUp, signOut }), [user, sessionMessage, signIn, signUp, signOut])
+  const completeAccountDeletion = useCallback(async deletedUserId => {
+    const stillOwnSession = () => !getSession() || getSession().user.id === deletedUserId
+    if (!stillOwnSession()) return false
+    await cleanupPushAfterAccountDeletion(deletedUserId)
+    if (!stillOwnSession()) return false
+    window.localStorage.removeItem('organiza:read-notifications:' + deletedUserId)
+    clearSession(); setUser(null); setSessionMessage('Tu cuenta fue eliminada correctamente.')
+    return true
+  }, [])
+
+  const value = useMemo(() => ({ user, sessionMessage, signIn, signUp, signOut, completeAccountDeletion }), [user, sessionMessage, signIn, signUp, signOut, completeAccountDeletion])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

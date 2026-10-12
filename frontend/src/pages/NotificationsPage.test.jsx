@@ -1,4 +1,6 @@
-import { render, screen, fireEvent } from '@testing-library/react'
+import { useState } from 'react'
+import userEvent from '@testing-library/user-event'
+import { render, screen, fireEvent, within, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { expect, it, vi } from 'vitest'
 import { AppContext } from '../context/app-context.js'
@@ -24,4 +26,24 @@ it('presenta notificaciones leídas y mensajes sin saltos de línea', () => {
   render(<MemoryRouter><AppContext.Provider value={{ data: { notifications: [{ id: 8, type: 'study_activity', message: 'Repasar mañana', read: true }] }, updateItem: vi.fn(), refreshNotifications: vi.fn() }}><NotificationsPage /></AppContext.Provider></MemoryRouter>)
   expect(screen.getByText('Leída')).toBeInTheDocument()
   expect(screen.getByText('Repasar mañana').closest('button')).not.toHaveClass('is-unread')
+})
+
+it('confirma eliminación, conserva errores y actualiza lista y contador después del servidor', async () => {
+  const remove = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true)
+  const Harness = () => {
+    const [notifications, setNotifications] = useState([{ id: 'test-id', type: 'exam', message: 'Mi frase\nDatos reales del evento', read: false }])
+    return <MemoryRouter><AppContext.Provider value={{ data: { notifications }, refreshNotifications: vi.fn(), updateItem: vi.fn(), removeItem: async (collection, id) => { if (!await remove(collection, id)) return false; setNotifications([]); return true } }}><NotificationsPage /></AppContext.Provider></MemoryRouter>
+  }
+  render(<Harness />)
+  await userEvent.click(screen.getByRole('button', { name: /Eliminar notificación: Mi frase/ }))
+  const dialog = screen.getByRole('dialog')
+  expect(dialog).toHaveTextContent('No se borrarán el examen')
+  expect(remove).not.toHaveBeenCalled()
+  await userEvent.click(within(dialog).getByRole('button', { name: 'Eliminar' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo eliminar')
+  expect(screen.getByText('Mi frase', { selector: '.notification-title' })).toBeInTheDocument()
+  await userEvent.click(within(dialog).getByRole('button', { name: 'Eliminar' }))
+  await waitFor(() => expect(screen.getByText('0 notificaciones sin leer')).toBeInTheDocument())
+  expect(screen.queryByText('Mi frase')).not.toBeInTheDocument()
+  expect(remove).toHaveBeenLastCalledWith('notifications', 'test-id')
 })
