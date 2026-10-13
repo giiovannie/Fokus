@@ -1,0 +1,6 @@
+.guided-tour-highlight { position: relative; outline: 3px solid var(--color-accent) !important; outline-offset: 5px; box-shadow: 0 0 0 9999px rgb(0 0 0 / 25%); scroll-margin: 8rem; }
+.guided-tour-card { position: fixed; z-index: 2100; padding: 1rem; max-height: calc(100dvh - 24px); overflow: auto; background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-subtle); box-shadow: 0 8px 30px rgb(0 0 0 / 25%); animation: tour-reveal 180ms ease-out; }
+.guided-tour-card button { min-height: 44px; }
+.guided-tour-welcome { border: 1px solid var(--border-subtle); background: var(--bg-card); padding: 1.25rem; border-radius: 1rem; margin-bottom: 1.25rem; }
+@keyframes tour-reveal { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .guided-tour-card { animation: none; } }

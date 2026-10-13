@@ -4,6 +4,7 @@ import { EmptyState } from '../components/ui/EmptyState.jsx'
 import { PageHeader } from '../components/ui/PageHeader.jsx'
 import { ConfirmButton } from '../components/ui/ConfirmButton.jsx'
 import { TaskForm } from '../components/common/TaskForm.jsx'
+import { AssistedSubjectCreation } from '../components/common/AssistedSubjectCreation.jsx'
 import { useAppData } from '../hooks/useAppData.js'
 import { formatDate } from '../utils/date.js'
 
@@ -16,6 +17,9 @@ const TasksPage = () => {
   const [form, setForm] = useState(initialForm)
   const [editingId, setEditingId] = useState(null)
   const [creating, setCreating] = useState(false)
+  const [assisting, setAssisting] = useState(null)
+  const assist = () => { setAssisting(creating ? 'modal' : 'inline'); setCreating(false) }
+  const returnToTask = () => { if (assisting === 'modal') setCreating(true); setAssisting(null) }
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState(null)
   const [noteDrafts, setNoteDrafts] = useState({})
@@ -47,7 +51,7 @@ const TasksPage = () => {
   return (
     <>
       <PageHeader eyebrow="Planificación" title="Tareas" description="Seguí pendientes, avances y tareas completadas.">
-        <button className="btn btn-primary" type="button" onClick={() => { setForm(initialForm); setEditingId(null); setFormError(null); setCreating(true) }}>Crear tarea</button>
+        <button className="btn btn-primary" type="button" data-tour="task-create" onClick={() => { setForm(initialForm); setEditingId(null); setFormError(null); setCreating(true) }}>Crear tarea</button>
       </PageHeader>
       <div className="row g-4">
         <div className={editingId ? "col-12 col-xl-8" : "col-12"}>
@@ -68,11 +72,12 @@ const TasksPage = () => {
             </div></article>
           ))}
         </div>
-        {editingId && <div className="col-12 col-xl-4"><TaskForm editing={Boolean(editingId)} form={form} subjects={data.subjects} onCancel={() => { setEditingId(null); setForm(initialForm) }} onChange={(field, value) => setForm({ ...form, [field]: value })} onSubmit={submit} /></div>}
+        {editingId && <div className="col-12 col-xl-4"><TaskForm editing={Boolean(editingId)} form={form} subjects={data.subjects} onCreateSubject={assist} onCancel={() => { setEditingId(null); setForm(initialForm) }} onChange={(field, value) => setForm({ ...form, [field]: value })} onSubmit={submit} /></div>}
       </div>
       <FormModal open={creating} title="Crear tarea" formId="create-task-form" busy={saving} error={formError} onClose={() => setCreating(false)}>
-        <TaskForm inModal form={form} subjects={data.subjects} onChange={(field, value) => setForm({ ...form, [field]: value })} onSubmit={submit} />
+        <TaskForm inModal form={form} subjects={data.subjects} onCreateSubject={assist} onChange={(field, value) => setForm({ ...form, [field]: value })} onSubmit={submit} />
       </FormModal>
+      <AssistedSubjectCreation open={Boolean(assisting)} onReturn={returnToTask} onCreated={id => { setForm(current => ({ ...current, subject_id: String(id) })); returnToTask() }} />
     </>
   )
 }

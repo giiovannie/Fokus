@@ -23,7 +23,7 @@ const NotificationsPage = () => {
   }
   return <>
     <PageHeader eyebrow="Actividad" title="Notificaciones" description={`${unread} notificaciones sin leer`}>
-      <div className="d-flex flex-wrap gap-2"><Link className="btn btn-primary" to="/notifications/preferences">Configurar recordatorios</Link>{unread > 0 && <button className="btn btn-outline-primary" onClick={markAll} type="button">Marcar todas como leídas</button>}{data.notifications.length > 0 && <button className="btn btn-outline-danger" type="button" onClick={() => { setError(null); setSelected({ all: true }) }}>Eliminar todas</button>}</div>
+      <div className="d-flex flex-wrap gap-2" data-tour="notification-tools"><Link className="btn btn-primary" to="/notifications/preferences">Configurar recordatorios</Link>{unread > 0 && <button className="btn btn-outline-primary" onClick={markAll} type="button">Marcar todas como leídas</button>}{data.notifications.length > 0 && <button className="btn btn-outline-danger" type="button" onClick={() => { setError(null); setSelected({ all: true }) }}>Eliminar todas</button>}</div>
     </PageHeader>
     <div className="notifications-list">
       {data.notifications.length === 0 ? <EmptyState title="Todo al día" message="No tenés notificaciones nuevas." /> : data.notifications.map(notification => <article className={`notification-card ${notification.read ? '' : 'is-unread'}`} key={notification.id}>

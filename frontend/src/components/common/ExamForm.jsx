@@ -1,4 +1,4 @@
-const ExamForm = ({ editing, form, subjects, onCancel, onChange, onSubmit, inModal = false }) => (
+const ExamForm = ({ editing, form, subjects, onCancel, onChange, onSubmit, onCreateSubject, inModal = false }) => (
   <div className={inModal ? "card border-0" : "card border-0 form-card sticky-xl-top"}>
     <div className={inModal ? "modal-form-content" : "card-body p-4"}>
       {!inModal && <h2 className="h5 mb-3">{editing ? 'Editar examen' : 'Nuevo examen'}</h2>}
@@ -10,6 +10,7 @@ const ExamForm = ({ editing, form, subjects, onCancel, onChange, onSubmit, inMod
           <option value="">Seleccionar</option>
           {subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}
         </select>
+        {onCreateSubject && <div className="mb-3">{!subjects.length && <p className="small text-secondary">Primero necesitás una materia. Podés crearla sin perder los datos del examen.</p>}<button className="btn btn-sm btn-outline-primary" type="button" onClick={onCreateSubject}>Crear materia aquí</button></div>}
         <label className="form-label" htmlFor="exam-date">Fecha *</label>
         <input className="form-control mb-3" id="exam-date" required type="date" value={form.exam_date} onChange={(event) => onChange('exam_date', event.target.value)} />
         <label className="form-label" htmlFor="exam-topics">Temas</label>

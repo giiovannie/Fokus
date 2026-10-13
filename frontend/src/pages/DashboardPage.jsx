@@ -13,13 +13,13 @@ const DashboardPage = () => {
   return (
     <>
       <PageHeader eyebrow="Resumen" title={`Buen día, ${data.profile.name}`} description="Estas son tus prioridades académicas." />
-      <div className="row g-3 mb-4">
+      <div className="row g-3 mb-4" data-tour="dashboard-stats">
         <div className="col-6 col-xl-3"><StatCard label="Materias" value={data.subjects.length} detail="En curso" /></div>
         <div className="col-6 col-xl-3"><StatCard label="Tareas pendientes" value={pendingTasks.length} detail="Por completar" tone="warning" /></div>
         <div className="col-6 col-xl-3"><StatCard label="Próximos exámenes" value={upcomingExams.length} detail="Agendados" tone="info" /></div>
         <div className="col-6 col-xl-3"><StatCard label="Notificaciones" value={unread} detail="Sin leer" tone="success" /></div>
       </div>
-      <div className="row g-4">
+      <div className="row g-4" data-tour="dashboard-upcoming">
         <div className="col-12 col-xl-7">
           <section className="card border-0 h-100">
             <div className="card-body p-4">
