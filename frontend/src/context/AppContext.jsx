@@ -11,6 +11,7 @@ import { createTask, deleteTask, getTasks, updateTask, updateTaskStatus } from '
 import { createTeacher, getTeachers } from '../services/teachers.service.js'
 import { applyNotificationReadState, persistNotificationReadState } from '../utils/notificationReadState.js'
 import { AppContext } from './app-context.js'
+import { REMINDER_CREATED_EVENT } from '../services/pushNotifications.js'
 
 const emptyProfile = { name: '', last_name: '', nickname: '', avatar_url: '' }
 const emptyData = {
@@ -133,9 +134,17 @@ export const AppProvider = ({ children }) => {
     const requests = {
       teachers: () => createTeacher(item),
       subjects: () => createSubject(item),
-      tasks: () => createTask(item),
+      tasks: async () => {
+        const created = await createTask(item)
+        if (created.due_date) window.dispatchEvent(new CustomEvent(REMINDER_CREATED_EVENT, { detail: { userId: user?.id, type: 'task' } }))
+        return created
+      },
       notes: () => createTaskNote(item.task_id, { content: item.content }),
-      exams: () => createExam(item),
+      exams: async () => {
+        const created = await createExam(item)
+        if (created.exam_date) window.dispatchEvent(new CustomEvent(REMINDER_CREATED_EVENT, { detail: { userId: user?.id, type: 'exam' } }))
+        return created
+      },
       activities: () => createStudyActivity(item),
     }
     const request = requests[collection]
@@ -145,7 +154,7 @@ export const AppProvider = ({ children }) => {
       ...current,
       [collection]: [...current[collection], collection === 'subjects' ? normalizeSubject(created) : created],
     }), collection)
-  }, [runMutation])
+  }, [runMutation, user?.id])
 
   const updateItem = useCallback((collection, id, changes) => {
     if (collection === 'notifications') {

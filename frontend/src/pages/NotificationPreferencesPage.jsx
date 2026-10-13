@@ -66,7 +66,7 @@ const NotificationPreferencesPage = () => {
       </form>
       <div className="row g-4 mt-1">{[['exam', 'exámenes'], ['task', 'entregas']].map(([type, label]) => <div key={type} className="col-12 col-lg-6"><div className="card border-0 h-100"><div className="card-body p-4"><h2 className="h5">Recordatorios de {label}</h2><NotificationRulesEditor type={type} label={label} rules={rules.filter(rule => rule.event_type === type)} onChange={setRules} /><p className="small text-secondary mt-3 mb-0">Para recibirlos, activá las notificaciones generales y la de {label}.</p></div></div></div>)}</div>
       <NotificationPhrasesEditor phrases={phrases} onChange={setPhrases} />
-      <WebPushControls />
+      <WebPushControls remindersEnabled={form.enabled && (form.exams_enabled || form.tasks_enabled)} />
       <NotificationTester phrases={phrases} preferences={form} />
     </>}
   </>

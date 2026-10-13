@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { saveNotificationPreferences } from '../services/notifications.service.js'
 import { preferencesPayload } from '../utils/notificationPreferences.js'
+import { PUSH_PREFERENCES_EVENT } from '../services/pushNotifications.js'
 
 export const usePreferenceAutosave = (validate, validationInputs) => {
   const [form, setForm] = useState(null)
@@ -25,6 +26,7 @@ export const usePreferenceAutosave = (validate, validationInputs) => {
     setStatus({ kind: 'saving' })
     try {
       const saved = preferencesPayload(await saveNotificationPreferences(snapshot))
+      window.dispatchEvent(new Event(PUSH_PREFERENCES_EVENT))
       s.confirmed = saved
       if (!s.active) return
       if (revision === s.revision) { s.draft = saved; setForm(saved); setStatus({ kind: 'saved' }) }

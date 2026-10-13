@@ -3,7 +3,7 @@ import request from 'supertest'
 import { Op } from 'sequelize'
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest'
 import { app } from '../src/app.js'
-import { User, Profile, Teacher, Subject, Task, Exam, StudyActivity, AdminEvent, NotificationReminder, NotificationDelivery, NotificationWorkerState, sequelize } from '../src/models/index.js'
+import { User, Profile, Teacher, Subject, Task, Exam, StudyActivity, AdminEvent, NotificationReminder, NotificationDelivery, NotificationWorkerState, NotificationPreference, NotificationRule, sequelize } from '../src/models/index.js'
 import { comparePassword } from '../src/helpers/password.js'
 import { deleteAccountAvatars, getOwnedAvatarId } from '../src/services/cloudinary.service.js'
 import { ReminderRepository } from '../src/services/reminderRepository.js'
@@ -23,6 +23,8 @@ beforeEach(() => {
   accounts = new Map([[7, row(7)], [8, row(8)]])
   vi.spyOn(User, 'findByPk').mockImplementation(async id => accounts.get(Number(id)) ?? null)
   transaction = vi.spyOn(sequelize, 'transaction').mockImplementation(async action => action(tx))
+  vi.spyOn(NotificationPreference, 'create').mockResolvedValue({})
+  vi.spyOn(NotificationRule, 'bulkCreate').mockResolvedValue([])
   vi.spyOn(ReminderRepository.prototype, 'withRunLock').mockImplementation(async action => action(owned))
   vi.spyOn(AdminEvent, 'update').mockResolvedValue([1])
   vi.spyOn(AdminEvent, 'create').mockResolvedValue({})
