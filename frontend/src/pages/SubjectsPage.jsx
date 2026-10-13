@@ -4,6 +4,8 @@ import { EmptyState } from '../components/ui/EmptyState.jsx'
 import { PageHeader } from '../components/ui/PageHeader.jsx'
 import { ConfirmButton } from '../components/ui/ConfirmButton.jsx'
 import { useAppData } from '../hooks/useAppData.js'
+import { SubjectForm } from '../components/common/SubjectForm.jsx'
+import { TeacherForm } from '../components/common/TeacherForm.jsx'
 
 const emptySubject = { name: '', teacher_id: '' }
 
@@ -13,6 +15,7 @@ const SubjectsPage = () => {
   const [editingId, setEditingId] = useState(null)
   const [teacherName, setTeacherName] = useState('')
   const [dialog, setDialog] = useState(null)
+  const [returnToSubject, setReturnToSubject] = useState(false)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState(null)
 
@@ -38,33 +41,26 @@ const SubjectsPage = () => {
     if (saving) return
     if (!teacherName.trim()) return
     setSaving(true); setFormError(null)
-    const succeeded = await addItem('teachers', { name: teacherName.trim() })
+    let created
+    const values = { name: teacherName.trim() }
+    const succeeded = returnToSubject
+      ? await addItem('teachers', values, row => { created = row })
+      : await addItem('teachers', values)
     setSaving(false)
     if (!succeeded) { setFormError('No se pudo agregar el profesor. Volvé a intentar.'); return }
-    setDialog(null)
+    if (returnToSubject && created?.id) {
+      setForm(current => ({ ...current, teacher_id: String(created.id) })); setDialog(returnToSubject === 'modal' ? 'subject' : null); setReturnToSubject(false)
+    } else setDialog(null)
     setTeacherName('')
     notify('Profesor agregado.')
   }
 
-  const subjectForm = <form id={editingId ? undefined : "create-subject-form"} onSubmit={submitSubject}>
-              <label className="form-label" htmlFor="subject-name">Nombre</label>
-              <input className="form-control mb-3" id="subject-name" required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
-              <label className="form-label" htmlFor="subject-teacher">Profesor</label>
-              <select className="form-select mb-3" id="subject-teacher" required value={form.teacher_id} onChange={(event) => setForm({ ...form, teacher_id: event.target.value })}>
-                <option value="">Seleccionar</option>{data.teachers.map((teacher) => <option key={teacher.id} value={teacher.id}>{teacher.name}</option>)}
-              </select>
-              {editingId && <button className="btn btn-primary w-100" type="submit">{editingId ? 'Guardar cambios' : 'Crear materia'}</button>}
-              {editingId && <button className="btn btn-link w-100 mt-2" onClick={() => { setEditingId(null); setForm(emptySubject) }} type="button">Cancelar</button>}
-            </form>
-  const teacherForm = <form id="create-teacher-form" onSubmit={submitTeacher}>
-    <label className="form-label" htmlFor="teacher-name">Nombre del profesor</label>
-    <input className="form-control" id="teacher-name" required value={teacherName} onChange={(event) => setTeacherName(event.target.value)} placeholder="Nombre completo" />
-  </form>
-
+  const subjectForm = <SubjectForm form={form} teachers={data.teachers} editing={Boolean(editingId)} onChange={(field, value) => setForm(current => ({ ...current, [field]: value }))} onSubmit={submitSubject} onCancel={() => { setEditingId(null); setForm(emptySubject) }} onAddTeacher={() => { setTeacherName(''); setFormError(null); setReturnToSubject(dialog === 'subject' ? 'modal' : 'inline'); setDialog('teacher') }} />
+  const teacherForm = <TeacherForm name={teacherName} onChange={setTeacherName} onSubmit={submitTeacher} />
   return (
     <>
       <PageHeader eyebrow="Cursada" title="Materias" description="Administrá tus materias y profesores.">
-        <div className="d-flex flex-wrap gap-2"><button className="btn btn-primary" type="button" onClick={() => { setEditingId(null); setForm(emptySubject); setFormError(null); setDialog('subject') }}>Crear materia</button><button className="btn btn-outline-secondary" type="button" onClick={() => { setTeacherName(''); setFormError(null); setDialog('teacher') }}>Agregar profesor</button></div>
+        <div className="d-flex flex-wrap gap-2"><button className="btn btn-primary" type="button" data-tour="subject-create" onClick={() => { setEditingId(null); setForm(emptySubject); setFormError(null); setDialog('subject') }}>Crear materia</button><button className="btn btn-outline-secondary" type="button" data-tour="teacher-create" onClick={() => { setTeacherName(''); setFormError(null); setDialog('teacher') }}>Agregar profesor</button></div>
       </PageHeader>
       <div className="row g-4">
         <div className={editingId ? "col-12 col-xl-8" : "col-12"}>
@@ -92,7 +88,7 @@ const SubjectsPage = () => {
         </div>
         {editingId && <div className="col-12 col-xl-4"><div className="card border-0"><div className="card-body p-4"><h2 className="h5">Editar materia</h2>{subjectForm}</div></div></div>}
       </div>
-      <FormModal open={dialog !== null} title={dialog === 'subject' ? 'Crear materia' : 'Agregar profesor'} formId={dialog === 'subject' ? 'create-subject-form' : 'create-teacher-form'} submitLabel={dialog === 'subject' ? 'Crear materia' : 'Agregar'} busy={saving} error={formError} onClose={() => setDialog(null)}>{dialog === 'subject' ? subjectForm : teacherForm}</FormModal>
+      <FormModal open={dialog !== null} title={dialog === 'subject' ? 'Crear materia' : 'Agregar profesor'} formId={dialog === 'subject' ? 'create-subject-form' : 'create-teacher-form'} submitLabel={dialog === 'subject' ? 'Crear materia' : 'Agregar'} busy={saving} error={formError} onClose={() => { if (dialog === 'teacher' && returnToSubject) { setDialog(returnToSubject === 'modal' ? 'subject' : null); setReturnToSubject(false) } else setDialog(null) }}>{dialog === 'subject' ? subjectForm : teacherForm}</FormModal>
     </>
   )
 }

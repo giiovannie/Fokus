@@ -1,4 +1,4 @@
-const TaskForm = ({ editing, form, subjects, onCancel, onChange, onSubmit, inModal = false }) => (
+const TaskForm = ({ editing, form, subjects, onCancel, onChange, onSubmit, onCreateSubject, inModal = false }) => (
   <div className={inModal ? "card border-0" : "card border-0 sticky-xl-top form-card"}>
     <div className={inModal ? "modal-form-content" : "card-body p-4"}>
       {!inModal && <h2 className="h5 mb-3">{editing ? 'Editar tarea' : 'Nueva tarea'}</h2>}
@@ -12,6 +12,7 @@ const TaskForm = ({ editing, form, subjects, onCancel, onChange, onSubmit, inMod
           <option value="">Seleccionar</option>
           {subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}
         </select>
+        {onCreateSubject && <div className="mb-3">{!subjects.length && <p className="small text-secondary">Primero necesitás una materia. Podés crearla sin perder los datos de la tarea.</p>}<button className="btn btn-sm btn-outline-primary" type="button" onClick={onCreateSubject}>Crear materia aquí</button></div>}
         <label className="form-label" htmlFor="task-date">Fecha de entrega</label>
         <input className="form-control mb-3" id="task-date" required={form.due_date !== null} disabled={form.due_date === null} type="date" value={form.due_date ?? ''} onChange={(event) => onChange('due_date', event.target.value)} />
         <div className="form-check no-due-date-control mb-3"><input className="form-check-input" id="task-no-date" type="checkbox" checked={form.due_date === null} onChange={event => onChange('due_date', event.target.checked ? null : '')} /><label className="form-check-label" htmlFor="task-no-date">Sin fecha de entrega</label></div>

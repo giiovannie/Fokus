@@ -6,6 +6,7 @@ import { Toast } from '../components/ui/Toast.jsx'
 import { ErrorState, LoadingState } from '../components/ui/FeedbackState.jsx'
 import { useAppData } from '../hooks/useAppData.js'
 import { PushNotificationLifecycle } from '../components/common/PushNotificationLifecycle.jsx'
+import { GuidedOnboarding } from '../components/common/GuidedOnboarding.jsx'
 
 const MainLayout = () => {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -45,6 +46,7 @@ const MainLayout = () => {
         <main className="p-3 p-md-4 p-xl-5" id="main-content" tabIndex="-1">
           <div className="content-container">
             <PushNotificationLifecycle />
+            <GuidedOnboarding />
             {isLoading ? <LoadingState message="Preparando todo..." /> : error ? <ErrorState message={error} onRetry={retry} /> : <Outlet />}
           </div>
         </main>

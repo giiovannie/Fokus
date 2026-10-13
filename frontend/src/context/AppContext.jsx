@@ -108,10 +108,11 @@ export const AppProvider = ({ children }) => {
     }
   }, [notify, user?.id])
 
-  const runMutation = useCallback(async (request, applyResult, collection) => {
+  const runMutation = useCallback(async (request, applyResult, collection, onCreated) => {
     try {
       const result = await request()
       setData((current) => applyResult(current, result))
+      onCreated?.(result)
       if (['subjects', 'tasks', 'exams', 'activities'].includes(collection)) {
         try {
           const notifications = await getNotifications()
@@ -130,7 +131,7 @@ export const AppProvider = ({ children }) => {
     }
   }, [notify, user?.id])
 
-  const addItem = useCallback((collection, item) => {
+  const addItem = useCallback((collection, item, onCreated) => {
     const requests = {
       teachers: () => createTeacher(item),
       subjects: () => createSubject(item),
@@ -153,7 +154,7 @@ export const AppProvider = ({ children }) => {
     return runMutation(request, (current, created) => ({
       ...current,
       [collection]: [...current[collection], collection === 'subjects' ? normalizeSubject(created) : created],
-    }), collection)
+    }), collection, onCreated)
   }, [runMutation, user?.id])
 
   const updateItem = useCallback((collection, id, changes) => {

@@ -1082,6 +1082,23 @@ GET    /api/notifications
 ```
 
 
+# Progreso del tutorial del estudiante
+
+Estas rutas aditivas requieren JWT y rol real `student`; no aceptan un usuario destino.
+El perfil debe existir: 404 si falta. No cambian las respuestas de las rutas de perfil.
+
+- `GET /api/profiles/onboarding`: devuelve `{ version: 1, status, step, revision }`
+  sin escribir. Sin progreso: `status=not_started`, `step=0`, `revision=0`.
+- `PUT /api/profiles/onboarding`: body exacto `{ status, step, revision }`.
+  `status`: `in_progress`, `paused`, `skipped`, `completed`; `step`: entero 0–7.
+  `completed` exige paso 7. `revision` es un entero coincidente con la última lectura.
+  Respuesta 200 con versión 1 y revisión incrementada; revisión obsoleta:409,
+  datos/campos extra inválidos:400; sin sesión:401; superadministrador:403.
+
+Persiste únicamente la clave `onboarding` del JSON `profiles.preferences`, conservando
+otras preferencias. No crea perfiles ni actividades y no requiere migración.
+Detalles: [GUIDED-ONBOARDING.md](GUIDED-ONBOARDING.md).
+
 # Web Push: preferencias y reglas
 
 Configuración web/PWA; el transporte push y planificador se implementarán después.

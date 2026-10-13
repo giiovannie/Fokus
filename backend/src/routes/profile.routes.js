@@ -4,6 +4,8 @@ import { createProfile, getProfile, updateProfile, updateProfileAvatar } from '.
 import { authorizeProfileAvatar, uploadProfileAvatar, validateProfileAvatar } from '../middlewares/profileAvatar.middleware.js'
 import { authenticate, requireStudent } from '../middlewares/auth.middleware.js'
 import { validateRequest } from '../middlewares/validate.middleware.js'
+import { getOnboarding, putOnboarding } from '../controllers/onboarding.controller.js'
+import { onboardingValidator } from '../validators/onboarding.validator.js'
 import {
   createProfileValidator,
   profileIdValidator,
@@ -14,6 +16,8 @@ import {
 const router = Router()
 
 router.use(authenticate, requireStudent)
+router.get('/onboarding', getOnboarding)
+router.put('/onboarding', onboardingValidator, validateRequest, putOnboarding)
 router.post('/:id/avatar', avatarLimiter, profileIdValidator, validateRequest, authorizeProfileAvatar, uploadProfileAvatar, validateProfileAvatar, updateProfileAvatar)
 router.get('/:userId', profileUserIdValidator, validateRequest, getProfile)
 router.post('/', createProfileValidator, validateRequest, createProfile)
