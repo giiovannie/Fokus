@@ -3,6 +3,26 @@ import { getSession } from '../utils/authSession.js'
 
 const DEVICE_KEY = 'fokus-push-device'
 const OWNER_KEY = 'fokus-push-owner'
+export const REMINDER_CREATED_EVENT = 'fokus:reminder-created'
+export const PUSH_PREFERENCES_EVENT = 'fokus:push-preferences'
+const choiceKey = id => 'fokus-push-choice:' + id
+export const getPushChoice = id => {
+  const choice = localStorage.getItem(choiceKey(id))
+  if (choice) return choice
+  try {
+    if (JSON.parse(localStorage.getItem(OWNER_KEY) || 'null')?.user_id === id) {
+      localStorage.setItem(choiceKey(id), 'authorized')
+      return 'authorized'
+    }
+  } catch { /* Metadata antigua inválida. */ }
+  return null
+}
+export const setPushChoice = (id, choice) => localStorage.setItem(choiceKey(id), choice)
+const rejectedKey = id => 'fokus-push-rejected:' + id
+const assertSession = id => {
+  if (getSession()?.user.id !== id) throw new Error('La sesión cambió. Volvé a ingresar para revisar tus avisos.')
+}
+let synchronizing
 const fingerprint = async subscription => {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(subscription.toJSON())))
   return Array.from(new Uint8Array(digest), value => value.toString(16).padStart(2, '0')).join('')
@@ -37,18 +57,19 @@ const waitForWorker = async registration => {
   })
   return registration
 }
-export const activatePush = async (publicKey, label) => {
+export const activatePush = async (publicKey, label, { requestPermission = true } = {}) => {
   assertSupport()
   if (!publicKey) throw new Error('El servidor todavía no tiene configuradas las notificaciones Push.')
   let permission = Notification.permission
   // Solicitar permiso dentro del gesto del usuario, antes de otras esperas.
-  if (permission === 'default') permission = await Notification.requestPermission()
+  const userId = getSession()?.user.id
+  if (!userId) throw new Error('Iniciá sesión nuevamente antes de activar notificaciones.')
+  if (permission === 'default' && requestPermission) permission = await Notification.requestPermission()
   if (permission !== 'granted') throw new Error('Las notificaciones están bloqueadas. Permitilas en la configuración del sitio y volvé a intentar.')
   const registration = await waitForWorker(await navigator.serviceWorker.getRegistration() || await navigator.serviceWorker.register('/sw.js'))
   let old
   try { old = JSON.parse(window.localStorage.getItem(OWNER_KEY) || 'null') } catch { old = null }
-  const userId = getSession()?.user.id
-  if (!userId) throw new Error('Iniciá sesión nuevamente antes de activar notificaciones.')
+  assertSession(userId)
   let subscription = await registration.pushManager.getSubscription()
   const expectedKey = applicationKey(publicKey)
   const storedKey = subscription?.options?.applicationServerKey
@@ -58,35 +79,52 @@ export const activatePush = async (publicKey, label) => {
     subscription = null
   }
   const created = !subscription
-  if (!subscription) subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: expectedKey })
+  const options = { userVisibleOnly: true, applicationServerKey: expectedKey }
+  if (!requestPermission && registration.pushManager.permissionState && await registration.pushManager.permissionState(options) !== 'granted') {
+    throw new DOMException('Revisá el permiso de notificaciones de este dispositivo.', 'NotAllowedError')
+  }
+  assertSession(userId)
+  if (!subscription) subscription = await registration.pushManager.subscribe(options)
   try {
+    assertSession(userId)
+    const currentFingerprint = await fingerprint(subscription)
+    if (localStorage.getItem(rejectedKey(userId)) === currentFingerprint) {
+      throw Object.assign(new Error('Este dispositivo necesita actualizar el permiso de notificaciones. Revisalo en la configuración del navegador.'), { status: 410 })
+    }
+    assertSession(userId)
     const saved = await savePushSubscription({ device_id: getPushDeviceId(), device_label: label.trim() || 'Este navegador', subscription: subscription.toJSON() })
-    window.localStorage.setItem(OWNER_KEY, JSON.stringify({ id: saved.id, user_id: userId, fingerprint: await fingerprint(subscription) }))
+    assertSession(userId)
+    window.localStorage.setItem(OWNER_KEY, JSON.stringify({ id: saved.id, user_id: userId, fingerprint: currentFingerprint }))
+    setPushChoice(userId, 'authorized')
     return saved
   } catch (error) {
     if (created || [409, 410].includes(error.status)) {
+      if (error.status === 410) localStorage.setItem(rejectedKey(userId), await fingerprint(subscription))
       await subscription.unsubscribe().catch(() => false)
-      window.localStorage.removeItem(OWNER_KEY)
+      if (getSession()?.user.id === userId) window.localStorage.removeItem(OWNER_KEY)
     }
     throw error
   }
 }
-// Sin gesto del usuario solo reconciliar una suscripción que ya existe.
-// Nunca pedir permiso ni crear otra suscripción en esta revisión.
-export const synchronizePush = async (publicKey, devices) => {
+// Una renovación automática requiere autorización previa y nunca solicita permiso.
+const reconcilePush = async (publicKey, devices, { allowRenewal = false } = {}) => {
   const userId = getSession()?.user.id
   const own = devices.find(device => device.device_id === getPushDeviceId())
   const permission = globalThis.Notification?.permission
   const registration = await navigator.serviceWorker?.getRegistration?.()
   const local = await registration?.pushManager?.getSubscription()
   if (!userId) throw new Error('Iniciá sesión nuevamente para revisar las notificaciones.')
+  assertSession(userId)
+  const authorized = getPushChoice(userId) === 'authorized'
+  const renew = () => allowRenewal && authorized && globalThis.Notification?.permission === 'granted' && getPushChoice(userId) === 'authorized'
+    ? activatePush(publicKey, own?.device_label || 'Este dispositivo', { requestPermission: false }) : null
   if (permission !== 'granted' || !local || (local.expirationTime && local.expirationTime <= Date.now())) {
     if (own) await deactivatePush(own.id)
     else if (local) {
       if (!await local.unsubscribe()) throw new Error('No pudimos desvincular la suscripción anterior. Volvé a intentar.')
       localStorage.removeItem(OWNER_KEY)
     }
-    return null
+    return renew()
   }
   let owner
   try { owner = JSON.parse(localStorage.getItem(OWNER_KEY) || 'null') } catch { owner = null }
@@ -99,17 +137,25 @@ export const synchronizePush = async (publicKey, devices) => {
     return null
   }
   const currentFingerprint = await fingerprint(local)
+  assertSession(userId)
+  if (localStorage.getItem(rejectedKey(userId)) === currentFingerprint) {
+    if (!await local.unsubscribe()) throw new Error('No pudimos actualizar tus avisos. Revisá el permiso del navegador.')
+    localStorage.removeItem(OWNER_KEY)
+    return renew()
+  }
   if (own && owner?.id === own.id && owner.fingerprint === currentFingerprint) return own
   // Recuperar en el backend el vínculo perdido, sin volver a suscribir el navegador.
   try {
     const saved = await savePushSubscription({ device_id: getPushDeviceId(), device_label: own?.device_label || 'Este navegador', subscription: local.toJSON() })
+    assertSession(userId)
     localStorage.setItem(OWNER_KEY, JSON.stringify({ id: saved.id, user_id: userId, fingerprint: currentFingerprint }))
     return saved
   } catch (error) {
     if (error.status === 410) {
+      localStorage.setItem(rejectedKey(userId), currentFingerprint)
       if (!await local.unsubscribe()) throw new Error('No pudimos retirar la suscripción vencida. Volvé a intentar.')
       localStorage.removeItem(OWNER_KEY)
-      return null
+      return renew()
     }
     if (error.status === 409) {
       if (!await local.unsubscribe()) throw new Error('No pudimos desvincular la suscripción anterior. Volvé a intentar.')
@@ -117,6 +163,11 @@ export const synchronizePush = async (publicKey, devices) => {
     }
     throw error
   }
+}
+export const synchronizePush = (publicKey, devices, options) => {
+  if (synchronizing) return synchronizing
+  synchronizing = reconcilePush(publicKey, devices, options).finally(() => { synchronizing = null })
+  return synchronizing
 }
 // Una baja local evita avisos en un navegador compartido incluso si la API no responde.
 export const deactivatePush = async id => {
@@ -128,6 +179,8 @@ export const deactivatePush = async id => {
   window.localStorage.removeItem(OWNER_KEY)
 }
 export const cleanupPushOnLogout = async () => {
+  // Terminar un registro en curso antes de retirar el dispositivo de la cuenta.
+  if (synchronizing) await synchronizing.catch(() => {})
   let owner
   try { owner = JSON.parse(window.localStorage.getItem(OWNER_KEY) || 'null') } catch { owner = null }
   const registration = await navigator.serviceWorker?.getRegistration?.()

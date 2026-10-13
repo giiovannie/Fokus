@@ -1,13 +1,22 @@
 import { deleteOwnAccount } from '../services/accountDeletion.js'
 import { UniqueConstraintError } from 'sequelize'
 import { hashPassword } from '../helpers/password.js'
-import { User } from '../models/index.js'
+import { User, NotificationPreference, NotificationRule, sequelize } from '../models/index.js'
+import { notificationDefaults } from '../config/notificationPreferences.js'
 import { createHttpError } from '../utils/httpError.js'
 
 export const createUser = async (req, res, next) => {
   try {
     const password = await hashPassword(req.body.password)
-    const user = await User.create({ email: req.body.email.toLowerCase(), password })
+    const user = await sequelize.transaction(async transaction => {
+      const created = await User.create({ email: req.body.email.toLowerCase(), password }, { transaction })
+      await NotificationPreference.create({ ...notificationDefaults, user_id: created.id,
+        enabled: true, exams_enabled: true, tasks_enabled: true }, { transaction })
+      await NotificationRule.bulkCreate(['exam', 'task'].map(event_type => ({
+        user_id: created.id, event_type, offset_minutes: 60, enabled: true,
+      })), { transaction })
+      return created
+    })
 
     return res.status(201).json({ id: user.id, email: user.email })
   } catch (error) {

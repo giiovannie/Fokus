@@ -1,6 +1,6 @@
 import { webcrypto } from 'node:crypto'
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
-import { activatePush, cleanupPushOnLogout, deactivatePush, getPushDeviceId, synchronizePush } from './pushNotifications.js'
+import { activatePush, cleanupPushOnLogout, deactivatePush, getPushDeviceId, synchronizePush, setPushChoice, getPushChoice } from './pushNotifications.js'
 import { savePushSubscription, deletePushSubscription } from './notifications.service.js'
 import { saveSession } from '../utils/authSession.js'
 vi.mock('./notifications.service.js', () => ({ savePushSubscription: vi.fn(), deletePushSubscription: vi.fn() }))
@@ -132,6 +132,92 @@ describe('activación voluntaria de Web Push', () => {
     registration.pushManager.getSubscription.mockResolvedValue(subscription)
     savePushSubscription.mockRejectedValue(Object.assign(new Error('Otra cuenta'), { status: 409 }))
     await expect(activatePush(publicKey, 'Mi PC')).rejects.toThrow('Otra cuenta')
+    expect(subscription.unsubscribe).toHaveBeenCalledOnce()
+  })
+})
+
+describe('persistencia automática previamente autorizada', () => {
+  it('renueva registros anteriores sin perder la autorización al eliminar la metadata vieja', async () => {
+    notification.permission = 'granted'
+    localStorage.setItem('fokus-push-owner', JSON.stringify({ id: 12, user_id: 7 }))
+    subscription.expirationTime = Date.now() - 1
+    registration.pushManager.getSubscription.mockResolvedValueOnce(subscription).mockResolvedValue(null)
+    await synchronizePush(publicKey, [{ id: 12, device_id: getPushDeviceId() }], { allowRenewal: true })
+    expect(registration.pushManager.subscribe).toHaveBeenCalledOnce()
+    expect(getPushChoice(7)).toBe('authorized')
+    expect(notification.requestPermission).not.toHaveBeenCalled()
+  })
+  it('no invoca subscribe si PushManager informa permiso pendiente', async () => {
+    notification.permission = 'granted'; setPushChoice(7, 'authorized')
+    registration.pushManager.permissionState = vi.fn().mockResolvedValue('prompt')
+    await expect(synchronizePush(publicKey, [], { allowRenewal: true })).rejects.toMatchObject({ name: 'NotAllowedError' })
+    expect(registration.pushManager.subscribe).not.toHaveBeenCalled()
+    expect(notification.requestPermission).not.toHaveBeenCalled()
+  })
+  it('restaura después de logout y login sin volver a solicitar permiso', async () => {
+    notification.permission = 'granted'
+    await activatePush(publicKey, 'Android')
+    registration.pushManager.getSubscription.mockResolvedValue(subscription)
+    await cleanupPushOnLogout()
+    expect(getPushChoice(7)).toBe('authorized')
+    registration.pushManager.getSubscription.mockResolvedValue(null)
+    vi.clearAllMocks()
+    await synchronizePush(publicKey, [], { allowRenewal: true })
+    expect(registration.pushManager.subscribe).toHaveBeenCalledOnce()
+    expect(notification.requestPermission).not.toHaveBeenCalled()
+  })
+  it.each(['default', 'denied'])('no solicita permiso ni crea en segundo plano con %s', async permission => {
+    notification.permission = permission; setPushChoice(7, 'authorized')
+    await synchronizePush(publicKey, [], { allowRenewal: true })
+    expect(notification.requestPermission).not.toHaveBeenCalled()
+    expect(registration.pushManager.subscribe).not.toHaveBeenCalled()
+  })
+  it('no activa otra cuenta que todavía no autorizó sus avisos', async () => {
+    notification.permission = 'granted'; setPushChoice(8, 'authorized')
+    await synchronizePush(publicKey, [], { allowRenewal: true })
+    expect(registration.pushManager.subscribe).not.toHaveBeenCalled()
+  })
+  it('renueva una sola vez un endpoint rechazado usando otro, sin pedir permiso', async () => {
+    notification.permission = 'granted'; setPushChoice(7, 'authorized')
+    registration.pushManager.getSubscription.mockResolvedValueOnce(subscription).mockResolvedValue(null)
+    const renewed = { toJSON: () => ({ endpoint: 'https://fcm.googleapis.com/new', keys: { p256dh: 'new', auth: 'new' } }), unsubscribe: vi.fn().mockResolvedValue(true) }
+    registration.pushManager.subscribe.mockResolvedValue(renewed)
+    savePushSubscription.mockRejectedValueOnce(Object.assign(new Error('Gone'), { status: 410 }))
+    expect((await synchronizePush(publicKey, [], { allowRenewal: true })).id).toBe(12)
+    expect(subscription.unsubscribe).toHaveBeenCalledOnce()
+    expect(registration.pushManager.subscribe).toHaveBeenCalledOnce()
+    expect(savePushSubscription).toHaveBeenCalledTimes(2)
+    expect(savePushSubscription.mock.calls[1][0].subscription).toEqual(renewed.toJSON())
+    expect(notification.requestPermission).not.toHaveBeenCalled()
+  })
+  it('no vuelve a registrar el endpoint rechazado aunque el navegador lo devuelva', async () => {
+    notification.permission = 'granted'; setPushChoice(7, 'authorized')
+    registration.pushManager.getSubscription.mockResolvedValueOnce(subscription).mockResolvedValue(null)
+    savePushSubscription.mockRejectedValueOnce(Object.assign(new Error('Gone'), { status: 410 }))
+    await expect(synchronizePush(publicKey, [], { allowRenewal: true })).rejects.toThrow('actualizar el permiso')
+    await expect(synchronizePush(publicKey, [], { allowRenewal: true })).rejects.toThrow('actualizar el permiso')
+    expect(savePushSubscription).toHaveBeenCalledOnce()
+    expect(notification.requestPermission).not.toHaveBeenCalled()
+  })
+  it('comparte la revisión concurrente sin duplicar suscripciones', async () => {
+    notification.permission = 'granted'; setPushChoice(7, 'authorized')
+    await Promise.all([synchronizePush(publicKey, [], { allowRenewal: true }), synchronizePush(publicKey, [], { allowRenewal: true })])
+    expect(registration.pushManager.subscribe).toHaveBeenCalledOnce()
+    expect(savePushSubscription).toHaveBeenCalledOnce()
+  })
+  it('respeta la necesidad de gesto del navegador sin generar bucles', async () => {
+    notification.permission = 'granted'; setPushChoice(7, 'authorized')
+    registration.pushManager.subscribe.mockRejectedValue(new DOMException('Gesture required', 'NotAllowedError'))
+    await expect(synchronizePush(publicKey, [], { allowRenewal: true })).rejects.toMatchObject({ name: 'NotAllowedError' })
+    expect(registration.pushManager.subscribe).toHaveBeenCalledOnce()
+    expect(notification.requestPermission).not.toHaveBeenCalled()
+    expect(savePushSubscription).not.toHaveBeenCalled()
+  })
+  it('no registra una renovación pendiente si cambia la cuenta autenticada', async () => {
+    notification.permission = 'granted'; setPushChoice(7, 'authorized')
+    registration.pushManager.subscribe.mockImplementation(async () => { saveSession({ token: 'other', user: { id: 8 } }); return subscription })
+    await expect(synchronizePush(publicKey, [], { allowRenewal: true })).rejects.toThrow('sesión cambió')
+    expect(savePushSubscription).not.toHaveBeenCalled()
     expect(subscription.unsubscribe).toHaveBeenCalledOnce()
   })
 })

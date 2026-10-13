@@ -49,6 +49,7 @@ const AppConsumer = () => {
       <span>{toast?.message}</span>
       <button onClick={() => addItem('exams', { title: 'Parcial', exam_date: '2026-10-12', subject_id: 5 })} type="button">Agregar examen</button>
       <button onClick={() => addItem('tasks', { title: 'Entrega', due_date: '2026-10-12', subject_id: 5 })} type="button">Agregar entrega</button>
+      <button onClick={() => addItem('tasks', { title: 'Sin fecha', subject_id: 5 })} type="button">Agregar tarea sin fecha</button>
       <button onClick={() => updateItem('tasks', 9, { status: 'completed' })} type="button">Completar tarea</button>
       <button onClick={() => addItem('teachers', { name: 'Nuevo profesor' })} type="button">Agregar profesor</button>
       <button onClick={() => removeItem('tasks', 9)} type="button">Eliminar tarea</button>
@@ -63,6 +64,25 @@ const renderApp = () => render(
 )
 
 describe('AppProvider', () => {
+  it('ofrece recordatorios solo tras guardar eventos fechados correctamente', async () => {
+    saveSession({ user: { id: 7 }, token: 'jwt-token' })
+    const base = createFetchMock()
+    vi.stubGlobal('fetch', vi.fn(async (url, options = {}) => {
+      if (options.method === 'POST' && (String(url).endsWith('/exams') || String(url).endsWith('/tasks'))) return response({ id: 30, ...JSON.parse(options.body) }, 201)
+      return base(url, options)
+    }))
+    const listener = vi.fn()
+    window.addEventListener('fokus:reminder-created', listener)
+    try {
+      renderApp(); await screen.findByText('Matemática:4')
+      await userEvent.click(screen.getByRole('button', { name: 'Agregar tarea sin fecha' }))
+      expect(listener).not.toHaveBeenCalled()
+      await userEvent.click(screen.getByRole('button', { name: 'Agregar examen' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Agregar entrega' }))
+      expect(listener).toHaveBeenCalledTimes(2)
+      expect(listener.mock.calls.map(([event]) => event.detail)).toEqual([{ userId: 7, type: 'exam' }, { userId: 7, type: 'task' }])
+    } finally { window.removeEventListener('fokus:reminder-created', listener) }
+  })
   afterEach(() => {
     clearSession()
     vi.unstubAllGlobals()

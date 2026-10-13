@@ -167,8 +167,8 @@ La ausencia de suscripciones no produce ese error. La prueba visible en la panta
 de preferencias es local y no demuestra que el proveedor acepte el endpoint remoto.
 
 El registro rechaza con HTTP 410 una suscripción cuyo hash ya fue rechazado para
-ese usuario y dispositivo. La sincronización retira la suscripción local y deja
-la nueva activación al gesto del usuario, sin solicitar permisos silenciosamente.
+ese usuario y dispositivo. La sincronización retira la suscripción local y permite
+renovarla con autorización previa y permiso vigente, sin solicitar permisos silenciosamente.
 El registro comparte el bloqueo del worker antes de tomar el bloqueo del usuario;
 si hay un lote activo responde 503 y conserva la suscripción existente del navegador.
 Los conflictos 409 mantienen la protección contra vínculos con otra cuenta.
@@ -182,7 +182,45 @@ No reabre entregas aceptadas, inciertas, canceladas ni avisos fuera de la ventan
 No requiere cambios de esquema. La llegada real a Android requiere validación
 controlada después de integrar y publicar la corrección.
 
+## Persistencia automática y primera autorización
+
+Las cuentas de estudiante nuevas se crean en una transacción con preferencias
+generales, exámenes y tareas habilitadas, y una regla de una hora antes por tipo.
+Usa las tablas existentes y valores explícitos: no necesita migraciones ni cambia
+preferencias/reglas de cuentas anteriores. Los avisos siguen sujetos a fecha,
+silencio, reglas y permisos; las tareas sin fecha no generan avisos ni invitaciones.
+
+Después de guardar el primer examen o tarea con fecha se ofrece una explicación
+sencilla. El permiso se solicita únicamente al pulsar «Permitir recordatorios».
+«Ahora no» y una respuesta negativa se recuerdan por usuario en este navegador;
+no se vuelve a ofrecer en cada evento. La activación sigue disponible en preferencias.
+
+El layout del estudiante verifica al cargar y al recuperar foco, visibilidad o
+conexión. Respeta preferencias desactivadas. Revisiones simultáneas comparten una
+operación, y los eventos de retorno se limitan a una revisión por minuto. No hay
+sondeo periódico, envíos de prueba ni credenciales persistidas para renovar.
+Se conserva la baja al cerrar sesión para proteger dispositivos compartidos;
+al volver a ingresar se restaura automáticamente si la cuenta había autorizado
+y el navegador mantiene el permiso. No se transfiere consentimiento entre cuentas.
+
+Se reutiliza una suscripción válida y solo se registra si falta o cambió su vínculo.
+Una suscripción faltante, caducada o rechazada se puede renovar una vez por revisión
+si `Notification.permission` y, cuando existe, `PushManager.permissionState` lo permiten.
+La renovación nunca llama a `requestPermission`. Se recuerda el hash de la última
+suscripción rechazada y no se vuelve a registrarla aunque el navegador la devuelva.
+Si exige un gesto, se explica que hace falta revisar el permiso en preferencias.
+Cambiar de cuenta durante una operación aborta su registro y logout espera el
+registro automático en curso antes de retirar la suscripción.
+
+Las decisiones locales persisten entre sesiones y actualizaciones, pero borrar
+datos del sitio elimina esa memoria. Android puede bloquear la visualización en
+ajustes del sistema aunque el sitio tenga permiso. No se puede garantizar una
+renovación mientras Fokus está cerrada: se revisa al volver a cargarla. Se conserva
+la recuperación del backend, deduplicación y ventana de 15 minutos descritas arriba.
+La entrega real a Android requiere una prueba controlada posterior a publicación.
+
 ## Referencias
 
 - https://github.com/web-push-libs/web-push/blob/master/README.md
 - https://developer.mozilla.org/en-US/docs/Web/API/PushManager/subscribe
+- https://w3c.github.io/push-api/#dom-pushmanager-subscribe
