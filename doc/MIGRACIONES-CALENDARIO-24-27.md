@@ -179,3 +179,89 @@ exacto y sin unicidad/prefijo; la identidad única original de recordatorios
 conservada; enum exam/task/agenda, FK hacia users CASCADE y subjects SET NULL,
 ambas ON UPDATE CASCADE. Verificar también las columnas relacionadas de las FK
 con SHOW CREATE TABLE agenda_events, sin asumir que basta ver el nombre de tabla.
+
+## Cierre de preparación: diagnóstico confirmado por el equipo
+
+Datos confirmados posteriormente por el usuario: Aiven MySQL8.4.11, TLS y CA
+verificados, migraciones1–23 y checksums correctos;24–27 pendientes. Respaldos
+completos de10,11 y12 de octubre, sin ensayo de restauración confirmado. No se
+repitió ese diagnóstico. Los párrafos anteriores describen la revisión previa.
+
+Sigue faltando acreditar recuperación a T0 inmediatamente anterior al DDL:
+detener escritores autorizadamente, fijar T0 UTC y confirmar que la ventana PITR
+del servicio cubre ese estado. Ensayar recuperación en destino separado requiere
+autorización adicional y posible costo; no se realizó. Alternativa si no hay PITR:
+respaldo completo recuperable de ese estado, con escritores detenidos. Un respaldo
+completo del día12 no prueba cobertura de las escrituras posteriores. La pausa
+debe incluir usuarios/API; el ejecutor retiene el lock existente del worker durante
+DDL y verificaciones, sin modificar QStash ni variables. Una pausa larga puede
+afectar recordatorios por su tolerancia15min; medir y limitar ventana de mantenimiento.
+
+MySQL/mysqldump/Docker/Podman aislados no están disponibles; no se instaló nada ni
+se utilizaron datos personales para pruebas. Validación real8.4 sigue pendiente,
+independiente del ensayo de recuperación de datos. No se afirma que esté realizada.
+
+### Ejecutor controlado preparado (no ejecutado contra Aiven)
+
+Archivos existentes y revisados en esta máquina:
+`C:\Users\ivane\AppData\Local\Temp\fokus-calendar-migrations-24-27\apply.ps1`,
+`apply.mjs` y `execution-manifest.json`. Son temporales, no recursos del despliegue;
+conservarlos para la ejecución y volver a prepararlos si se elimina TEMP.
+
+El módulo reutiliza migrate/migrationStatus y TLS del proyecto; no lee `.env`.
+El manifiesto fija27checksums, runner/schema/TLS y propio ejecutor. Rechaza código
+distinto, orden distinto o escrituras fuera de cuatro DDL y cuatro INSERT de
+historial. Exige autorización final, recuperaciónT0 y ausencia de escrituras antes
+de solicitar credenciales ocultas. Version/destino fijados8.4.11/defaultdb.
+
+Bajo locks de migraciones y worker revalida el estado23+4 como comprobación necesaria
+en el límite de escritura, no como diagnóstico repetido ahora. No espera un worker
+ocupado: se detiene. lock_wait_timeout10s se aplica solo a su sesión. Verifica tipos,
+defaults, FK/motor/índice de agenda e índices secundarios después de cada DDL y
+antes de registrar éxito. Después de cada registro verifica historial, índice único
+original de recordatorios y conteos/huellas SHA256 de todos los registros originales
+en lotes500 ordenados por ID. Datos/huellas permanecen en memoria, sin imprimirlos
+ni guardarlos; no se realiza una copia del respaldo. Cualquier discrepancia/error
+detiene antes del siguiente paso, sin rollback ficticio ni reintento automático.
+
+Validado offline: sintaxisNode/PowerShell, definición de tipos/SQL, orden exacto,
+whitelist de ocho escrituras y bloqueo por confirmaciones ausentes sin conexión.
+No sustituye una ejecución en MySQL real ni confirma recuperaciónPITR. No se ejecutó
+ningún DDL, INSERT, lock ni consulta a producción durante esta preparación.
+
+Solo después de resolver los requisitos y obtener autorización explícita:
+
+```powershell
+& 'C:\Users\ivane\AppData\Local\Temp\fokus-calendar-migrations-24-27\apply.ps1' -Execute -FinalAuthorization -RecoveryToT0Confirmed -WritesPaused
+```
+
+Este es el comando controlado preferido para exigir verificación individual,
+en lugar del up genérico. Éxito esperado: pasos24/25/26/27 verificados,27aplicadas,
+cero pendientes y conservación de datos. Usar además las consultas SELECT de arriba
+y guardar solo informe seguro. Fallo/DDL parcial: detener publicación y analizar.
+
+### Integración y Render posteriores, preparados pero NO realizados
+
+Con migraciones completas/verificadas y nueva autorización de publicación:
+
+```powershell
+git fetch origin
+git status --short
+git switch develop
+git pull --ff-only origin develop
+git merge --no-ff --no-commit features/fix-ruleta-solo-materias
+```
+
+Resolver conflictos si existen conservando calendario/ruleta/búhos y tutorial
+retirado. Revalidar backend/frontend/lint/build de la integración antes de crear
+el commit de merge y hacer push origin/develop. Esos comandos de escritura Git no
+se ejecutaron aquí. Confirmar que el commit final contiene f098ced/e5b3ba0/96b0ad2.
+
+Verificar en Render que frontend y backend despliegan automáticamente ese mismo
+commit y llegan a Live, sin despliegues manuales ni configuración nueva. Revisar
+logs seguros de arranque y GET /api/health200; el health solo acredita proceso
+disponible, no entrega Push ni funcionamiento completo de la base. Comprobar GET
+autenticado /api/calendar por rango, ruta frontend/calendar, ruleta solo materias,
+recursos gráficos/manifiesto y ausencia del tutorial. No crear exámenes, modificar
+registros ni enviar Push de prueba sin autorización adicional. No declarar publicado
+si falta confirmar uno de los servicios o el hash Live del backend/frontend.
