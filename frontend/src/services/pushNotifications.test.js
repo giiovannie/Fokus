@@ -18,6 +18,32 @@ beforeEach(() => {
 })
 afterEach(() => { vi.clearAllMocks(); vi.unstubAllGlobals(); localStorage.clear() })
 describe('activación voluntaria de Web Push', () => {
+  it('retira un endpoint rechazado sin renovación silenciosa y permite activar uno nuevo', async () => {
+    notification.permission = 'granted'
+    registration.pushManager.getSubscription.mockResolvedValue(subscription)
+    const device = getPushDeviceId()
+    savePushSubscription.mockRejectedValueOnce(Object.assign(new Error('Vencida'), { status: 410 }))
+    expect(await synchronizePush(publicKey, [])).toBeNull()
+    expect(subscription.unsubscribe).toHaveBeenCalledOnce()
+    expect(registration.pushManager.subscribe).not.toHaveBeenCalled()
+    expect(notification.requestPermission).not.toHaveBeenCalled()
+    expect(localStorage.getItem('fokus-push-owner')).toBeNull()
+    registration.pushManager.getSubscription.mockResolvedValue(null)
+    subscription.toJSON.mockReturnValue({ endpoint: 'https://fcm.googleapis.com/renewed', keys: { p256dh: 'new', auth: 'new' } })
+    await activatePush(publicKey, 'Android')
+    expect(registration.pushManager.subscribe).toHaveBeenCalledOnce()
+    expect(savePushSubscription).toHaveBeenLastCalledWith({ device_id: device, device_label: 'Android', subscription: subscription.toJSON() })
+  })
+  it.each(['activate', 'synchronize'])('conserva la suscripción existente ante un 503 en %s', async operation => {
+    notification.permission = 'granted'
+    registration.pushManager.getSubscription.mockResolvedValue(subscription)
+    localStorage.setItem('fokus-push-owner', JSON.stringify({ id: 12, user_id: 7 }))
+    savePushSubscription.mockRejectedValueOnce(Object.assign(new Error('Ocupado'), { status: 503 }))
+    await expect(operation === 'activate' ? activatePush(publicKey, 'Android') : synchronizePush(publicKey, [])).rejects.toThrow('Ocupado')
+    expect(subscription.unsubscribe).not.toHaveBeenCalled()
+    expect(registration.pushManager.subscribe).not.toHaveBeenCalled()
+    expect(JSON.parse(localStorage.getItem('fokus-push-owner')).id).toBe(12)
+  })
   it('mantiene el dispositivo, solicita permiso solamente al activar y registra claves públicas del navegador', async () => {
     expect(getPushDeviceId()).toBe(getPushDeviceId())
     expect(notification.requestPermission).not.toHaveBeenCalled()

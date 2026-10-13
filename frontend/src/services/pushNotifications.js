@@ -64,7 +64,10 @@ export const activatePush = async (publicKey, label) => {
     window.localStorage.setItem(OWNER_KEY, JSON.stringify({ id: saved.id, user_id: userId, fingerprint: await fingerprint(subscription) }))
     return saved
   } catch (error) {
-    if (created || error.status === 409) await subscription.unsubscribe().catch(() => false)
+    if (created || [409, 410].includes(error.status)) {
+      await subscription.unsubscribe().catch(() => false)
+      window.localStorage.removeItem(OWNER_KEY)
+    }
     throw error
   }
 }
@@ -103,7 +106,15 @@ export const synchronizePush = async (publicKey, devices) => {
     localStorage.setItem(OWNER_KEY, JSON.stringify({ id: saved.id, user_id: userId, fingerprint: currentFingerprint }))
     return saved
   } catch (error) {
-    if (error.status === 409) await local.unsubscribe().catch(() => false)
+    if (error.status === 410) {
+      if (!await local.unsubscribe()) throw new Error('No pudimos retirar la suscripción vencida. Volvé a intentar.')
+      localStorage.removeItem(OWNER_KEY)
+      return null
+    }
+    if (error.status === 409) {
+      if (!await local.unsubscribe()) throw new Error('No pudimos desvincular la suscripción anterior. Volvé a intentar.')
+      localStorage.removeItem(OWNER_KEY)
+    }
     throw error
   }
 }

@@ -158,6 +158,30 @@ Cambios pendientes anteriores se conservan. No commits/push ni producción.
 Falta el motor de fechas/zonas/silencio, cola con cancelación/deduplicación, planificador
 compatible con Render y validación remota de producción en una etapa futura.
 
+## Recuperación de suscripciones rechazadas por el proveedor
+
+En el flujo automático, `subscription_expired` significa que Web Push respondió
+404/410 después de un intento. El worker elimina esa suscripción; la clave foránea
+de la entrega queda en `NULL` por `ON DELETE SET NULL`, conservando su hash e historial.
+La ausencia de suscripciones no produce ese error. La prueba visible en la pantalla
+de preferencias es local y no demuestra que el proveedor acepte el endpoint remoto.
+
+El registro rechaza con HTTP 410 una suscripción cuyo hash ya fue rechazado para
+ese usuario y dispositivo. La sincronización retira la suscripción local y deja
+la nueva activación al gesto del usuario, sin solicitar permisos silenciosamente.
+El registro comparte el bloqueo del worker antes de tomar el bloqueo del usuario;
+si hay un lote activo responde 503 y conserva la suscripción existente del navegador.
+Los conflictos 409 mantienen la protección contra vínculos con otra cuenta.
+
+Una suscripción distinta puede reabrir exclusivamente entregas fallidas por
+`subscription_expired` del mismo usuario y dispositivo, dentro de los 15 minutos
+de tolerancia, con el evento todavía futuro y menos de tres intentos. Conserva
+el contador de intentos y la identidad deduplicada de la entrega. QStash ejecuta
+el envío posterior; el registro no envía Push y el worker revalida las preferencias.
+No reabre entregas aceptadas, inciertas, canceladas ni avisos fuera de la ventana.
+No requiere cambios de esquema. La llegada real a Android requiere validación
+controlada después de integrar y publicar la corrección.
+
 ## Referencias
 
 - https://github.com/web-push-libs/web-push/blob/master/README.md
