@@ -15,7 +15,6 @@ const SubjectsPage = () => {
   const [editingId, setEditingId] = useState(null)
   const [teacherName, setTeacherName] = useState('')
   const [dialog, setDialog] = useState(null)
-  const [returnToSubject, setReturnToSubject] = useState(false)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState(null)
 
@@ -41,21 +40,16 @@ const SubjectsPage = () => {
     if (saving) return
     if (!teacherName.trim()) return
     setSaving(true); setFormError(null)
-    let created
     const values = { name: teacherName.trim() }
-    const succeeded = returnToSubject
-      ? await addItem('teachers', values, row => { created = row })
-      : await addItem('teachers', values)
+    const succeeded = await addItem('teachers', values)
     setSaving(false)
     if (!succeeded) { setFormError('No se pudo agregar el profesor. Volvé a intentar.'); return }
-    if (returnToSubject && created?.id) {
-      setForm(current => ({ ...current, teacher_id: String(created.id) })); setDialog(returnToSubject === 'modal' ? 'subject' : null); setReturnToSubject(false)
-    } else setDialog(null)
+    setDialog(null)
     setTeacherName('')
     notify('Profesor agregado.')
   }
 
-  const subjectForm = <SubjectForm form={form} teachers={data.teachers} editing={Boolean(editingId)} onChange={(field, value) => setForm(current => ({ ...current, [field]: value }))} onSubmit={submitSubject} onCancel={() => { setEditingId(null); setForm(emptySubject) }} onAddTeacher={() => { setTeacherName(''); setFormError(null); setReturnToSubject(dialog === 'subject' ? 'modal' : 'inline'); setDialog('teacher') }} />
+  const subjectForm = <SubjectForm form={form} teachers={data.teachers} editing={Boolean(editingId)} onChange={(field, value) => setForm(current => ({ ...current, [field]: value }))} onSubmit={submitSubject} onCancel={() => { setEditingId(null); setForm(emptySubject) }} />
   const teacherForm = <TeacherForm name={teacherName} onChange={setTeacherName} onSubmit={submitTeacher} />
   return (
     <>
@@ -64,7 +58,7 @@ const SubjectsPage = () => {
       </PageHeader>
       <div className="row g-4">
         <div className={editingId ? "col-12 col-xl-8" : "col-12"}>
-          {data.subjects.length === 0 ? <EmptyState title="Todavía no hay materias" message="Creá tu primera materia para comenzar." /> : (
+          {data.subjects.length === 0 ? <EmptyState mascot="guide" title="Todavía no hay materias" message="Creá tu primera materia para comenzar." /> : (
             <div className="row g-3">
               {data.subjects.map((subject) => {
                 const teacher = data.teachers.find(({ id }) => id === subject.teacher_id)
@@ -88,7 +82,7 @@ const SubjectsPage = () => {
         </div>
         {editingId && <div className="col-12 col-xl-4"><div className="card border-0"><div className="card-body p-4"><h2 className="h5">Editar materia</h2>{subjectForm}</div></div></div>}
       </div>
-      <FormModal open={dialog !== null} title={dialog === 'subject' ? 'Crear materia' : 'Agregar profesor'} formId={dialog === 'subject' ? 'create-subject-form' : 'create-teacher-form'} submitLabel={dialog === 'subject' ? 'Crear materia' : 'Agregar'} busy={saving} error={formError} onClose={() => { if (dialog === 'teacher' && returnToSubject) { setDialog(returnToSubject === 'modal' ? 'subject' : null); setReturnToSubject(false) } else setDialog(null) }}>{dialog === 'subject' ? subjectForm : teacherForm}</FormModal>
+      <FormModal open={dialog !== null} title={dialog === 'subject' ? 'Crear materia' : 'Agregar profesor'} formId={dialog === 'subject' ? 'create-subject-form' : 'create-teacher-form'} submitLabel={dialog === 'subject' ? 'Crear materia' : 'Agregar'} busy={saving} error={formError} onClose={() => setDialog(null)}>{dialog === 'subject' ? subjectForm : teacherForm}</FormModal>
     </>
   )
 }

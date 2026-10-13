@@ -10,23 +10,14 @@ export const randomIndex = (length, draw = drawUint32) => {
   return value % length
 }
 
-export const buildRouletteOptions = (data, includeCompleted = false) => {
-  const subjects = data.subjects || []
-  const subjectNames = new Map(subjects.map(subject => [Number(subject.id), subject.name]))
+export const buildRouletteOptions = (data) => {
   const unique = new Map()
-  const add = (type, rows) => {
-    for (const row of rows) {
-      const id = Number(row.id), key = type + ':' + id
-      if (!Number.isSafeInteger(id) || id < 1 || unique.has(key)) continue
-      unique.set(key, { key, id, type, label: type === 'subject' ? row.name : row.title,
-        subject: subjectNames.get(Number(row.subject_id)) || row.subject?.name || '', status: row.status,
-        href: '/' + { subject: 'subjects', task: 'tasks', exam: 'exams' }[type] + '#' + type + '-' + id })
-    }
+  for (const row of data.subjects || []) {
+    const id = Number(row.id), key = 'subject:' + id
+    if (!Number.isSafeInteger(id) || id < 1 || unique.has(key)) continue
+    unique.set(key, { key, id, type: 'subject', label: row.name, href: '/subjects#subject-' + id })
   }
-  add('subject', subjects)
-  add('task', [...(data.tasks || []), ...subjects.flatMap(subject => subject.tasks || [])])
-  add('exam', [...(data.exams || []), ...subjects.flatMap(subject => subject.exams || [])])
-  return [...unique.values()].filter(option => includeCompleted || option.type !== 'task' || option.status !== 'completed')
+  return [...unique.values()]
 }
 
 export const winningRotation = (previous, index, count) => {

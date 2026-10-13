@@ -17,7 +17,7 @@ export const PushNotificationLifecycle = () => {
     const offer = () => {
       if (!candidate || !loadedSettings) return
       const { preferences, config } = loadedSettings
-      if (config.enabled && preferences.enabled && preferences[candidate + 's_enabled'] && !getPushChoice(user.id) && Notification.permission !== 'denied') {
+      if (config.enabled && preferences.enabled && (candidate === 'agenda' || preferences[candidate + 's_enabled']) && !getPushChoice(user.id) && Notification.permission !== 'denied') {
         setPushChoice(user.id, 'offered'); setPrompt(true)
       }
       candidate = null
@@ -30,7 +30,7 @@ export const PushNotificationLifecycle = () => {
         if (!active) return
         loadedSettings = { preferences, config }; setSettings(loadedSettings)
         offer()
-        if (!config.enabled || !preferences.enabled || (!preferences.exams_enabled && !preferences.tasks_enabled)) {
+        if (!config.enabled || !preferences.enabled) {
           setPrompt(false); setAttention(false); return
         }
         const choice = getPushChoice(user.id)

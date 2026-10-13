@@ -1,5 +1,6 @@
 import { Temporal } from '@js-temporal/polyfill'
 import { notificationDefaults, maxOffsetMinutes } from '../config/notificationPreferences.js'
+import { workerLimits } from '../config/reminderWorker.js'
 
 // Primera ocurrencia en un solapamiento; inicio exacto del tramo válido tras un hueco.
 export const resolveEventTime = (date, time, timezone) => {
@@ -28,8 +29,17 @@ export const postponeSilence = (instant, preferences) => {
   }
   return instant
 }
-export const eventHasExpired = (type, eventAt, now) => type === 'exam' ? eventAt <= now : eventAt < now
+export const eventHasExpired = (type, eventAt, now) => type === 'agenda' ? eventAt + workerLimits.catchUpMs < now : type === 'exam' ? eventAt <= now : eventAt < now
 export const calculateReminders = ({ event, eventType, preferences: saved, rules }) => {
+  if (eventType === 'agenda') {
+    const preferences = { ...notificationDefaults, ...saved }
+    if (!preferences.enabled || !event.event_time || event.reminder_minutes == null) return []
+    if (![0, 15, 60, 1440].includes(event.reminder_minutes)) throw new Error('Invalid agenda offset')
+    const effective = resolveEventTime(event.event_date, event.event_time, preferences.timezone)
+    const due = postponeSilence(effective.epochMilliseconds - event.reminder_minutes * 60000, preferences)
+    if (due > effective.epochMilliseconds) return []
+    return [{ offset_minutes: event.reminder_minutes, due_at: new Date(due), event_at: new Date(effective.epochMilliseconds), effective: { date: effective.toPlainDate().toString(), time: effective.toPlainTime().toString().slice(0, 5), timezone: preferences.timezone } }]
+  }
   if (eventType === 'task' && !event.due_date) return []
   const preferences = { ...notificationDefaults, ...saved }
   if (!preferences.enabled || !preferences[eventType === 'exam' ? 'exams_enabled' : 'tasks_enabled'] || (eventType === 'task' && event.status === 'completed')) return []

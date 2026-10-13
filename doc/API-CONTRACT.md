@@ -1345,3 +1345,51 @@ el backend. `ALTER TABLE users` puede bloquear temporalmente; el DDL MySQL no ti
 rollback transaccional. Un fallo parcial requiere revisión, nunca repetir DDL a
 ciegas. Se prepararon pruebas de SQL generado y correspondencia modelo/migración;
 no sustituyen una prueba con el motor real. No ejecutar en Aiven durante desarrollo.
+
+## Calendario y agenda (rama features/calendario-agenda)
+
+Todas las operaciones requieren JWT y estudiante activo; no aceptan `user_id`.
+Sin sesión:401; superadmin:403; eventos ajenos o inexistentes:404. Se conserva
+el formato de errores y la autenticación existentes.
+
+- `GET /api/calendar?from=YYYY-MM-DD&to=YYYY-MM-DD`: fechas civiles válidas,
+  años 1000–9999, orden ascendente y diferencia máxima de 62 días (63 fechas
+  inclusivas). Query opcional `custom_only=true|false`, false por defecto.
+  Respuesta 200 `{ events, timezone, truncated }`. Hasta 500 eventos por origen,
+  ordenados por fecha, hora e identidad. `custom_only=true` omite tareas/exámenes.
+  Tareas sin fecha no se asignan a un día. La zona es la preferencia guardada,
+  o America/Argentina/Cordoba si no existe.
+- Cada evento contiene `{ key, id, type, title, description, date, time,
+  subject?, subject_id }`. `key` es `exam:ID|task:ID|agenda:ID`; `type` es
+  `exam|task|personal|academic`. `date` conserva YYYY-MM-DD, `time` puede ser null;
+  no representa un timestamp UTC. Exámenes/tareas tienen `href` a su tarjeta
+  original, tareas también `status`. Agenda agrega `kind`, `event_date`,
+  `event_time` y `reminder_minutes`. No se exponen datos de suscripciones.
+- `POST /api/calendar/events`: body
+  `{ title, description?, kind, event_date, event_time, subject_id, reminder_minutes }`.
+  Título string no vacío, trim y hasta 180; descripción string/null hasta 5000;
+  `kind=personal|academic`; fecha válida; `event_time=null|HH:mm`;
+  `subject_id=null|integer positivo` (materia propia, únicamente académico);
+  `reminder_minutes=null|0|15|60|1440` (valor numérico, requiere hora explícita).
+  Campos no permitidos:400. Los nullable deben enviarse como null para indicar
+  día completo/sin materia/sin aviso. Respuesta 201 con los campos del evento
+  e ID, sin `user_id`. No activa preferencias ni crea registros de examen/tarea.
+- `PUT /api/calendar/events/:id`: reemplazo completo con el mismo body;
+  respuesta 200 igual que POST. Cancela pendientes anteriores y programa solo
+  avisos futuros; conserva identidades ya consumidas.
+- `DELETE /api/calendar/events/:id`: respuesta 204 tras cancelar pendientes
+  propios y eliminar el evento; el cliente confirma antes de llamar.
+- Las mutaciones comparten lock del worker y transacción por usuario. Si el
+  worker está ocupado:503 sin guardar, con mensaje para reintentar. El frontend
+  conserva el formulario. Materia ajena:400.
+
+Agenda emplea la categoría interna `agenda` de notification_reminders; no amplía
+las reglas/frases de exámenes/tareas. Respeta habilitación general, silencio,
+autorización, suscripciones, ledger y reintentos existentes. Día completo no
+programa avisos. No se crean avisos con vencimiento ya pasado; los previamente
+programados admiten tolerancia de 15 minutos, también para aviso al comenzar.
+La bandeja incluye proyecciones de agenda con hora y recordatorio configurado;
+una proyección no acredita envío Web Push. Descartarla no cancela el evento.
+
+Requiere migraciones preparadas 24–27 y revisión previa a producción; ver
+[Calendario y agenda](CALENDAR-AGENDA.md). No fueron ejecutadas en producción.

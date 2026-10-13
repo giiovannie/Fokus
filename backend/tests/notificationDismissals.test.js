@@ -1,7 +1,7 @@
 import request from 'supertest'
 import { beforeEach, afterEach, expect, it, vi } from 'vitest'
 import { app } from '../src/app.js'
-import { User, Exam, Task, StudyActivity, NotificationPreference, NotificationDismissal, NotificationReminder } from '../src/models/index.js'
+import { AgendaEvent, User, Exam, Task, StudyActivity, NotificationPreference, NotificationDismissal, NotificationReminder } from '../src/models/index.js'
 vi.mock('../src/helpers/token.js', () => ({ verifyToken: token => { if (!['7', '8'].includes(token)) throw new Error(); return { sub: Number(token) } } }))
 let rows, events
 const call = (method, suffix = '', user = 7) => request(app)[method]('/api/notifications' + suffix).set('Authorization', 'Bearer ' + user)
@@ -11,6 +11,7 @@ beforeEach(() => {
   vi.spyOn(NotificationPreference, 'findOne').mockResolvedValue(null)
   vi.spyOn(Exam, 'findAll').mockResolvedValue(events)
   vi.spyOn(Task, 'findAll').mockResolvedValue([])
+  vi.spyOn(AgendaEvent, 'findAll').mockResolvedValue([])
   vi.spyOn(StudyActivity, 'findAll').mockResolvedValue([])
   vi.spyOn(NotificationDismissal, 'findAll').mockImplementation(async ({ where }) => rows.filter(row => row.user_id === where.user_id))
   vi.spyOn(NotificationDismissal, 'findOne').mockImplementation(async ({ where }) => rows.find(row => row.user_id === where.user_id && row.notification_key === where.notification_key) ?? null)

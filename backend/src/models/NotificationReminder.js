@@ -3,7 +3,7 @@ import { sequelize } from '../config/database.js'
 const NotificationReminder = sequelize.define('NotificationReminder', {
   id: { type: D.INTEGER.UNSIGNED, autoIncrement: true, primaryKey: true },
   user_id: { type: D.INTEGER.UNSIGNED, allowNull: false, unique: 'reminder_identity' },
-  event_type: { type: D.ENUM('exam', 'task'), allowNull: false, unique: 'reminder_identity' },
+  event_type: { type: D.ENUM('exam', 'task', 'agenda'), allowNull: false, unique: 'reminder_identity' },
   event_id: { type: D.INTEGER.UNSIGNED, allowNull: false, unique: 'reminder_identity' },
   offset_minutes: { type: D.INTEGER.UNSIGNED, allowNull: false, unique: 'reminder_identity' },
   due_at: { type: D.DATE, allowNull: false },

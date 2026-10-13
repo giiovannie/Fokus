@@ -5,7 +5,6 @@ import { EmptyState } from '../components/ui/EmptyState.jsx'
 import { PageHeader } from '../components/ui/PageHeader.jsx'
 import { ConfirmButton } from '../components/ui/ConfirmButton.jsx'
 import { ExamForm } from '../components/common/ExamForm.jsx'
-import { AssistedSubjectCreation } from '../components/common/AssistedSubjectCreation.jsx'
 import { useAppData } from '../hooks/useAppData.js'
 import { daysRemaining, formatDate, urgencyClass } from '../utils/date.js'
 
@@ -16,9 +15,6 @@ const ExamsPage = () => {
   const [form, setForm] = useState(initialForm)
   const [editingId, setEditingId] = useState(null)
   const [creating, setCreating] = useState(false)
-  const [assisting, setAssisting] = useState(null)
-  const assist = () => { setAssisting(creating ? 'modal' : 'inline'); setCreating(false) }
-  const returnToExam = () => { if (assisting === 'modal') setCreating(true); setAssisting(null) }
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState(null)
 
@@ -57,12 +53,11 @@ const ExamsPage = () => {
             })}</div>
           )}
         </div>
-        {editingId && <div className="col-12 col-xl-4"><ExamForm editing={Boolean(editingId)} form={form} subjects={data.subjects} onCreateSubject={assist} onCancel={() => { setEditingId(null); setForm(initialForm) }} onChange={(field, value) => setForm({ ...form, [field]: value })} onSubmit={submit} /></div>}
+        {editingId && <div className="col-12 col-xl-4"><ExamForm editing={Boolean(editingId)} form={form} subjects={data.subjects} onCancel={() => { setEditingId(null); setForm(initialForm) }} onChange={(field, value) => setForm({ ...form, [field]: value })} onSubmit={submit} /></div>}
       </div>
       <FormModal open={creating} title="Crear examen" formId="create-exam-form" busy={saving} error={formError} onClose={() => setCreating(false)}>
-        <ExamForm inModal form={form} subjects={data.subjects} onCreateSubject={assist} onChange={(field, value) => setForm({ ...form, [field]: value })} onSubmit={submit} />
+        <ExamForm inModal form={form} subjects={data.subjects} onChange={(field, value) => setForm({ ...form, [field]: value })} onSubmit={submit} />
       </FormModal>
-      <AssistedSubjectCreation open={Boolean(assisting)} onReturn={returnToExam} onCreated={id => { setForm(current => ({ ...current, subject_id: String(id) })); returnToExam() }} />
     </>
   )
 }

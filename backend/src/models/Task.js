@@ -13,6 +13,6 @@ const Task = sequelize.define('Task', {
     defaultValue: 'pending',
   },
   subject_id: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false },
-}, { tableName: 'tasks' })
+}, { tableName: 'tasks', indexes: [{ name: 'task_subject_date', fields: ['subject_id', 'due_date', 'id'] }] })
 
 export { Task }

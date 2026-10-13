@@ -1,12 +1,26 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Op } from 'sequelize'
 import { getNotifications } from '../src/controllers/notification.controller.js'
-import { Exam, Task, StudyActivity, Subject, NotificationPreference, NotificationPhrase, NotificationDismissal } from '../src/models/index.js'
+import { AgendaEvent, Exam, Task, StudyActivity, Subject, NotificationPreference, NotificationPhrase, NotificationDismissal } from '../src/models/index.js'
 
-beforeEach(() => { vi.spyOn(NotificationDismissal, 'findAll').mockResolvedValue([]) })
+beforeEach(() => { vi.spyOn(NotificationDismissal, 'findAll').mockResolvedValue([]); vi.spyOn(AgendaEvent, 'findAll').mockResolvedValue([]) })
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers() })
 
 describe('upcoming notifications', () => {
+  it('incluye la agenda con avisos configurados y utiliza el día local y la asociación propia', async () => {
+    vi.useFakeTimers(); vi.setSystemTime('2026-10-13T02:00:00Z')
+    vi.spyOn(NotificationPreference, 'findOne').mockResolvedValue(null)
+    for (const model of [Exam, Task, StudyActivity]) vi.spyOn(model, 'findAll').mockResolvedValue([])
+    AgendaEvent.findAll.mockResolvedValue([{ id: 9, title: 'Consulta', event_date: '2026-10-12', event_time: '23:15' }])
+    const res = { json: vi.fn() }, next = vi.fn()
+    await getNotifications({ user: { id: 7 } }, res, next)
+    expect(next).not.toHaveBeenCalled()
+    expect(res.json.mock.calls[0][0][0]).toMatchObject({ type: 'agenda', date: '2026-10-12', message: expect.stringContaining('Consulta') })
+    const options = AgendaEvent.findAll.mock.calls[0][0]
+    expect(options.where.user_id).toBe(7); expect(options.where.event_date[Op.between][0]).toBe('2026-10-12')
+    expect(options.where.event_time[Op.ne]).toBeNull(); expect(options.where.reminder_minutes[Op.ne]).toBeNull()
+    expect(options.include[0]).toMatchObject({ required: false, where: { user_id: 7 } })
+  })
   it.each(['2026-10-11T12:00:00Z', '2026-10-12T01:30:00Z'])('includes tomorrow DATEONLY events with nullable times at %s', async (now) => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date(now))

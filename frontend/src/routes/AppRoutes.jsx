@@ -8,6 +8,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { MainLayout } from '../layouts/MainLayout.jsx'
 import { AuthLayout } from '../layouts/AuthLayout.jsx'
 import { DashboardPage } from '../pages/DashboardPage.jsx'
+import { CalendarPage } from '../pages/CalendarPage.jsx'
 import { ExamsPage } from '../pages/ExamsPage.jsx'
 import { LoginPage } from '../pages/LoginPage.jsx'
 import { NotFoundPage } from '../pages/NotFoundPage.jsx'
@@ -42,6 +43,7 @@ const AppRoutes = () => (
         <Route path="exams" element={<ExamsPage />} />
         <Route path="study" element={<StudyPage />} />
         <Route path="roulette" element={<RoulettePage />} />
+        <Route path="calendar" element={<CalendarPage />} />
         <Route path="notifications/preferences" element={<NotificationPreferencesPage />} />
         <Route path="notifications" element={<NotificationsPage />} />
         <Route path="profile" element={<ProfilePage />} />

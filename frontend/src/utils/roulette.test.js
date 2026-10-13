@@ -15,15 +15,14 @@ describe('selección justa de actividades', () => {
   it.each([0, -1, 1.5, NaN, 2 ** 32 + 1])('rechaza un total inválido: %s', length => {
     expect(() => randomIndex(length)).toThrow(RangeError)
   })
-  it('no duplica tareas y exámenes por sus referencias a materias y conserva identidades distintas', () => {
+  it('incluye solo materias únicas aunque tengan tareas y exámenes asociados', () => {
     const task = { id: 1, title: 'Entrega', status: 'pending', subject_id: 1 }
     const exam = { id: 1, title: 'Parcial', subject_id: 1 }
-    const data = { subjects: [{ id: 1, name: 'Programación', tasks: [task], exams: [exam] }], tasks: [task, { ...task, id: 2, status: 'completed' }], exams: [exam] }
+    const data = { subjects: [{ id: 1, name: 'Programación', tasks: [task], exams: [exam] }, { id: '1', name: 'Duplicada' }, { id: 2, name: 'Historia' }, { id: -1, name: 'Inválida' }], tasks: [task, { ...task, id: 2, status: 'completed' }], exams: [exam] }
     const before = structuredClone(data)
     const options = buildRouletteOptions(data)
-    expect(options.map(option => option.key)).toEqual(['subject:1', 'task:1', 'exam:1'])
-    expect(options[1]).toMatchObject({ subject: 'Programación', href: '/tasks#task-1' })
-    expect(buildRouletteOptions(data, true)).toHaveLength(4)
+    expect(options.map(option => option.key)).toEqual(['subject:1', 'subject:2'])
+    expect(options[1]).toMatchObject({ label: 'Historia', href: '/subjects#subject-2' })
     expect(data).toEqual(before)
   })
   it('no restaura un duplicado pendiente de una tarea completada en la lista principal', () => {

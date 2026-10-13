@@ -1,4 +1,6 @@
 import { Link } from 'react-router-dom'
+import { OwlMark } from '../components/common/OwlMark.jsx'
+import { UpcomingAgenda } from '../components/common/UpcomingAgenda.jsx'
 import { PageHeader } from '../components/ui/PageHeader.jsx'
 import { StatCard } from '../components/ui/StatCard.jsx'
 import { useAppData } from '../hooks/useAppData.js'
@@ -12,7 +14,7 @@ const DashboardPage = () => {
 
   return (
     <>
-      <PageHeader eyebrow="Resumen" title={`Buen día, ${data.profile.name}`} description="Estas son tus prioridades académicas." />
+      <div className="dashboard-welcome"><PageHeader eyebrow="Resumen" title={`Buen día, ${data.profile.name}`} description="Estas son tus prioridades académicas." /><OwlMark variant="welcome" welcome className="mascot-context" /></div>
       <div className="row g-3 mb-4" data-tour="dashboard-stats">
         <div className="col-6 col-xl-3"><StatCard label="Materias" value={data.subjects.length} detail="En curso" /></div>
         <div className="col-6 col-xl-3"><StatCard label="Tareas pendientes" value={pendingTasks.length} detail="Por completar" tone="warning" /></div>
@@ -47,6 +49,7 @@ const DashboardPage = () => {
           </section>
         </div>
       </div>
+      <UpcomingAgenda />
     </>
   )
 }

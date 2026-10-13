@@ -1,5 +1,7 @@
 import { OwlMark } from '../common/OwlMark.jsx'
 
+export const SuccessState = ({ message, onDismiss }) => <section className="mascot-success alert alert-success" role="status"><OwlMark variant="graduate" className="mascot-context" /><p className="mb-0">{message}</p>{onDismiss && <button className="btn btn-outline-success" type="button" onClick={onDismiss} aria-label="Cerrar felicitación">Cerrar</button>}</section>
+
 export const LoadingState = ({ message = 'Cargando información…' }) => (
   <div className="loading-state" role="status" aria-live="polite">
     <OwlMark loading />

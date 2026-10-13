@@ -5,7 +5,7 @@ import { PageHeader } from '../components/ui/PageHeader.jsx'
 import { FormModal } from '../components/ui/FormModal.jsx'
 import { useAppData } from '../hooks/useAppData.js'
 import { formatDate } from '../utils/date.js'
-const icons = { exam: '◫', task: '✓', study_activity: '◎' }
+const icons = { exam: '◫', task: '✓', study_activity: '◎', agenda: '▦' }
 const NotificationsPage = () => {
   const { data, updateItem, removeItem, removeAllNotifications, notify, refreshNotifications } = useAppData()
   const [selected, setSelected] = useState(null), [busy, setBusy] = useState(false), [error, setError] = useState(null)
