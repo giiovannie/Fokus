@@ -62,7 +62,7 @@ describe('eliminación de la cuenta propia', () => {
     expect(Subject.destroy).toHaveBeenCalledWith({ where: { user_id: 7 }, transaction: tx })
     expect(Teacher.destroy).toHaveBeenCalledWith({ where: { user_id: 7 }, transaction: tx })
     expect(NotificationReminder.update).toHaveBeenCalledWith({ status: 'cancelled', cancellation_reason: 'account_deleted' }, { where: { user_id: 7, status: 'pending' }, transaction: tx })
-    expect(NotificationWorkerState.destroy).toHaveBeenCalledWith({ where: { scope: ['events:7:exam', 'events:7:task'] }, transaction: tx })
+    expect(NotificationWorkerState.destroy).toHaveBeenCalledWith({ where: { scope: ['events:7:exam', 'events:7:task', 'events:7:agenda'] }, transaction: tx })
     expect(deleteAccountAvatars).toHaveBeenCalledWith(7, { required: true })
     expect(other.destroy).not.toHaveBeenCalled()
     expect((await auth(request(app).get('/api/tasks'))).status).toBe(401)

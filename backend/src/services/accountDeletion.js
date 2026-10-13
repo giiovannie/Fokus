@@ -31,7 +31,7 @@ export const deleteOwnAccount = async (userId, password, confirmation, actorId =
     await deleteAccountAvatars(userId, { required: !!avatarId })
     await assertOwned()
     await NotificationReminder.update({ status: 'cancelled', cancellation_reason: 'account_deleted' }, { where: { user_id: userId, status: 'pending' }, transaction })
-    await NotificationWorkerState.destroy({ where: { scope: ['events:' + userId + ':exam', 'events:' + userId + ':task'] }, transaction })
+    await NotificationWorkerState.destroy({ where: { scope: ['events:' + userId + ':exam', 'events:' + userId + ':task', 'events:' + userId + ':agenda'] }, transaction })
     // CASCADE elimina notas, tareas, exámenes y actividades; no tocar filas ajenas.
     await Subject.destroy({ where: { user_id: userId }, transaction })
     await Teacher.destroy({ where: { user_id: userId }, transaction })

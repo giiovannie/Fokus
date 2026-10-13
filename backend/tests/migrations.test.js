@@ -7,18 +7,19 @@ const migrations = await loadMigrations()
 const history = migrations.map(({ name, checksum }) => ({ name, checksum }))
 const tables = [...new Set(['FokusMigrations', ...migrations.map((item) => item.table)])]
 const timeFields = rows => migrations.filter(item => item.kind === 'add_columns' && rows.some(row => row.name === item.name)).flatMap(item => Object.entries(item.columns()).map(([Field, column]) => ({ Field, Type: column.type.key === 'TIME' ? 'time' : 'enum(' + column.type.values.map(value => "'" + value + "'").join(',') + ')' , Null: column.allowNull ? 'YES' : 'NO', Default: column.defaultValue ?? null })))
-const enumFields = rows => {
-  const item = migrations.find(m => m.kind === 'extend_enum')
+const enumFields = (rows, table = 'notification_preferences') => {
+  const item = migrations.find(m => m.kind === 'extend_enum' && m.table === table)
   const columns = rows.some(row => row.name === item.name) ? item.columns() : item.previousColumns()
-  return Object.entries(columns).map(([Field, column]) => ({ Field, Type: 'enum(' + column.type.values.map(value => "'" + value + "'").join(',') + ')', Null: 'NO', Default: 'formal' }))
+  return Object.entries(columns).map(([Field, column]) => ({ Field, Type: 'enum(' + column.type.values.map(value => "'" + value + "'").join(',') + ')', Null: 'NO', Default: column.defaultValue ?? null }))
 }
-const fieldsFor = (sql, rows) => sql.includes('notification_preferences') || sql.includes('NOTIFICATION_PREFERENCES') ? enumFields(rows) : [
+const fieldsFor = (sql, rows) => /notification_(preferences|reminders)/i.test(sql) ? enumFields(rows, /notification_reminders/i.test(sql) ? 'notification_reminders' : 'notification_preferences') : [
   ...timeFields(rows),
   ...(/`tasks`/i.test(sql) ? [{ Field: 'due_date', Type: 'date', Null: rows.some(row => row.name === migrations.find(item => item.kind === 'relax_nullability').name) ? 'YES' : 'NO', Default: null }] : []),
 ]
+const indexesFor = (sql, rows) => migrations.filter(item => item.kind === 'add_indexes' && sql.toLowerCase().includes('`' + item.table + '`') && rows.some(row => row.name === item.name)).flatMap(item => item.indexes.flatMap(index => index.fields.map((Column_name, position) => ({ Key_name: index.name, Column_name, Seq_in_index: position + 1, Non_unique: 1, Sub_part: null, Index_type: 'BTREE' }))))
 
 const statusDb = (tableNames, rows = [], caseMode = 0) => ({
-  query: vi.fn(async (sql) => sql.includes('@@lower_case_table_names') ? [{ lower_case_table_names: caseMode }] : sql === 'SHOW TABLES' ? tableNames.map((name) => ({ table: name })) : sql.startsWith('SHOW COLUMNS') ? fieldsFor(sql, rows) : rows),
+  query: vi.fn(async (sql) => sql.includes('@@lower_case_table_names') ? [{ lower_case_table_names: caseMode }] : sql === 'SHOW TABLES' ? tableNames.map((name) => ({ table: name })) : sql.startsWith('SHOW COLUMNS') ? fieldsFor(sql, rows) : sql.startsWith('SHOW INDEX') ? indexesFor(sql, rows) : rows),
 })
 
 const migrationDb = (tableNames = [], rows = [], acquired = 1, caseMode = 0) => {
@@ -28,6 +29,7 @@ const migrationDb = (tableNames = [], rows = [], acquired = 1, caseMode = 0) => 
     if (sql.includes('@@lower_case_table_names')) return [[{ lower_case_table_names: caseMode }]]
     if (sql === 'SHOW TABLES') return [tableNames.map((name) => ({ table: name }))]
     if (sql.startsWith('SHOW COLUMNS')) return [fieldsFor(sql, rows)]
+    if (sql.startsWith('SHOW INDEX')) return [indexesFor(sql, rows)]
     if (sql.startsWith('SELECT name')) return [rows]
     return [[]]
   })
@@ -49,7 +51,7 @@ describe('migraciones del esquema actual', () => {
     expect(migrationChecksum('changed\n', helper)).not.toBe(current)
   })
   it('reproduce todos los atributos físicos y relaciones de todos los modelos', () => {
-    expect(migrations).toHaveLength(23)
+    expect(migrations).toHaveLength(27)
     for (const item of migrations.filter(item => item.kind === 'create_table')) {
       const model = Object.values(sequelize.models).find((value) => value.tableName === item.table)
       const columns = item.columns()
@@ -58,7 +60,7 @@ describe('migraciones del esquema actual', () => {
       expect(Object.keys(columns).sort()).toEqual(Object.keys(physical).filter(name => !added.includes(name)).sort())
       for (const [name, column] of Object.entries(columns)) {
         const altered = migrations.find(m => ['extend_enum', 'relax_nullability'].includes(m.kind) && m.table === item.table && Object.hasOwn(m.columns(), name))
-        const attr = altered ? sequelize.normalizeAttribute(altered.previousColumns()[name]) : physical[name]
+        const attr = altered ? { ...physical[name], ...sequelize.normalizeAttribute(altered.previousColumns()[name]), defaultValue: altered.previousColumns()[name].defaultValue } : physical[name]
         const generator = sequelize.getQueryInterface().queryGenerator
         const options = { escape: generator.escape.bind(generator) }
         expect(sequelize.normalizeAttribute(column).type.toSql(options)).toBe(attr.type.toSql(options))
@@ -82,7 +84,7 @@ describe('migraciones del esquema actual', () => {
   })
   it('informa pendientes en una base vacía sin escribir', async () => {
     const db = statusDb([])
-    expect((await migrationStatus(db)).pending).toHaveLength(23)
+    expect((await migrationStatus(db)).pending).toHaveLength(27)
     expect(db.query).toHaveBeenCalledTimes(2)
     await expect(verifyMigrations(db)).rejects.toThrow('pendientes')
   })
@@ -156,7 +158,7 @@ describe('migraciones del esquema actual', () => {
     expect(sql).toContain("'custom'")
     expect(sql).not.toMatch(/DROP|TRUNCATE/)
     const beforeEnum = history.slice(0, migrations.findIndex(item => item.kind === 'extend_enum'))
-    const partial = statusDb(tables.filter(table => !['push_subscriptions', 'notification_reminders', 'notification_deliveries', 'notification_worker_state'].includes(table)), beforeEnum)
+    const partial = statusDb(tables.filter(table => !['push_subscriptions', 'notification_reminders', 'notification_deliveries', 'notification_worker_state', 'agenda_events'].includes(table)), beforeEnum)
     const original = partial.query.getMockImplementation()
     partial.query.mockImplementation(sql => sql.includes('SHOW COLUMNS FROM `notification_preferences`') ? enumFields(history) : original(sql))
     await expect(verifyMigrations(partial)).rejects.toThrow('parcial')
@@ -194,7 +196,7 @@ describe('migraciones del esquema actual', () => {
 it('relaja únicamente la fecha sin borrar datos y detecta un ALTER parcial', async () => {
   const target = migrations.findIndex(item => item.kind === 'relax_nullability')
   const prior = history.slice(0, target)
-  const existing = tables.filter(name => !['notification_dismissals', 'admin_events'].includes(name))
+  const existing = tables.filter(name => !['notification_dismissals', 'admin_events', 'agenda_events'].includes(name))
   const { db, query } = migrationDb(existing, prior)
   await migrate(db)
   const writes = query.mock.calls.filter(([sql]) => /^(CREATE|ALTER|INSERT)/.test(sql))
@@ -239,4 +241,28 @@ it('prepara estado de cuenta y auditoría sin borrar datos ni retener objetivos 
   expect(sql).toContain('ON DELETE SET NULL')
   expect(sql).toContain('ENGINE=InnoDB')
   expect(sql).not.toMatch(/password|email|DROP|TRUNCATE/)
+})
+
+it('desde las 23 migraciones previas prepara únicamente las cuatro de calendario', async () => {
+  const state = await migrationStatus(statusDb(tables.filter(name => name !== 'agenda_events'), history.slice(0, 23)))
+  expect(state.applied).toHaveLength(23); expect(state.pending).toHaveLength(4)
+  const { db, query } = migrationDb(tables.filter(name => name !== 'agenda_events'), history.slice(0, 23))
+  await migrate(db)
+  const changes = query.mock.calls.filter(([sql]) => /^(ALTER|CREATE|INSERT)/.test(sql))
+  expect(changes).toHaveLength(8)
+  expect(changes[2][0]).toContain("MODIFY COLUMN `event_type` ENUM('exam', 'task', 'agenda') NOT NULL")
+  expect(changes[2][0]).not.toMatch(/UNIQUE|DROP/)
+  expect(changes[4][0]).toContain('ADD INDEX `exam_subject_date` (`subject_id`, `exam_date`, `id`)')
+  expect(changes[6][0]).toContain('ADD INDEX `task_subject_date` (`subject_id`, `due_date`, `id`)')
+})
+it('detiene índices parciales o incompatibles mediante consultas de lectura', async () => {
+  const partial = statusDb(tables, history.slice(0, 25))
+  const original = partial.query.getMockImplementation()
+  partial.query.mockImplementation(sql => sql.startsWith('SHOW INDEX') ? indexesFor(sql, history) : original(sql))
+  await expect(migrationStatus(partial)).rejects.toThrow('parcialmente aplicado')
+  const wrong = statusDb(tables, history)
+  const read = wrong.query.getMockImplementation()
+  wrong.query.mockImplementation(sql => sql.startsWith('SHOW INDEX') ? indexesFor(sql, history).map(row => ({ ...row, Non_unique: 0 })) : read(sql))
+  await expect(migrationStatus(wrong)).rejects.toThrow('Índice incompatible')
+  expect(wrong.query.mock.calls.every(([sql]) => /^(SELECT|SHOW)/.test(sql))).toBe(true)
 })

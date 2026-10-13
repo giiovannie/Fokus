@@ -16,6 +16,13 @@ import { TaskNote } from './TaskNote.js'
 import { Teacher } from './Teacher.js'
 import { User } from './User.js'
 import { AdminEvent } from './AdminEvent.js'
+import { AgendaEvent } from './AgendaEvent.js'
+
+User.hasMany(AgendaEvent, { foreignKey: 'user_id', as: 'agenda_events', onDelete: 'CASCADE' })
+AgendaEvent.belongsTo(User, { foreignKey: 'user_id', as: 'user' })
+Subject.hasMany(AgendaEvent, { foreignKey: 'subject_id', as: 'agenda_events', onDelete: 'SET NULL' })
+AgendaEvent.belongsTo(Subject, { foreignKey: 'subject_id', as: 'subject', onDelete: 'SET NULL' })
+export { AgendaEvent }
 
 AdminEvent.belongsTo(User, { foreignKey: 'actor_id', as: 'actor', onDelete: 'SET NULL' })
 AdminEvent.belongsTo(User, { foreignKey: 'target_id', as: 'target', onDelete: 'SET NULL' })

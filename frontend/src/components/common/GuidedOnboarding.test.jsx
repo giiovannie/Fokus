@@ -9,7 +9,9 @@ import { GuidedOnboarding } from './GuidedOnboarding.jsx'
 import { getOnboarding, saveOnboarding, OPEN_TUTORIAL_EVENT } from '../../services/onboarding.service.js'
 import { saveSession, clearSession } from '../../utils/authSession.js'
 import { tourSteps } from '../../utils/guidedTour.js'
+import { getCalendar } from '../../services/calendar.service.js'
 vi.mock('../../services/onboarding.service.js', async original => ({ ...await original(), getOnboarding: vi.fn(), saveOnboarding: vi.fn() }))
+vi.mock('../../services/calendar.service.js', () => ({ CALENDAR_CHANGED_EVENT: 'fokus:calendar-changed', getCalendar: vi.fn() }))
 vi.mock('../../services/notifications.service.js', async original => ({ ...await original(), getNotificationPreferences: vi.fn(async () => ({ enabled: false, exams_enabled: false, tasks_enabled: false, timezone: 'America/Argentina/Cordoba', exam_default_time: '09:00', task_default_time: '09:00', exam_style: 'formal', task_style: 'formal', quiet_hours_enabled: false })), getNotificationRules: vi.fn(async () => []), getNotificationPhrases: vi.fn(async () => []), getPushConfig: vi.fn(async () => ({ enabled: false })) }))
 let progress, context, user
 const Location = () => <output aria-label="Ruta del recorrido">{useLocation().pathname}</output>
@@ -20,6 +22,7 @@ const next = async () => {
   await userEvent.click(button)
 }
 beforeEach(() => {
+  getCalendar.mockResolvedValue({ events: [], timezone: 'America/Argentina/Cordoba' })
   user = { id: 7, role: 'student' }; saveSession({ user, token: 'test-only' })
   progress = { version: 1, status: 'not_started', step: 0, revision: 0 }
   context = { data: { profile: { id: 2, name: 'Ana', nickname: 'Ani' }, teachers: [], subjects: [], tasks: [], exams: [], notes: [], notifications: [], activities: [] }, addItem: vi.fn(), updateItem: vi.fn(), removeItem: vi.fn(), refreshNotifications: vi.fn(), notify: vi.fn() }

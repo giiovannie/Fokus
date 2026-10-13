@@ -21,7 +21,11 @@ export const recoverExpiredPushDeliveries = async (subscription, transaction, no
       subscription_hash: { [Op.ne]: hash }, attempts: { [Op.lt]: workerLimits.maxAttempts } },
     include: [{ model: NotificationReminder, as: 'reminder', required: true,
       where: { user_id: subscription.user_id, status: { [Op.in]: ['pending', 'failed', 'processed'] },
-        due_at: { [Op.between]: [new Date(now.getTime() - workerLimits.catchUpMs), now] }, event_at: { [Op.gt]: now } } }],
+        due_at: { [Op.between]: [new Date(now.getTime() - workerLimits.catchUpMs), now] },
+        [Op.or]: [
+          { event_at: { [Op.gt]: now } },
+          { event_type: 'agenda', event_at: { [Op.gte]: new Date(now.getTime() - workerLimits.catchUpMs) } },
+        ] } }],
     order: [['id', 'ASC']], limit: workerLimits.deliveries, transaction, lock: transaction.LOCK.UPDATE,
   })
   for (const delivery of rows) {

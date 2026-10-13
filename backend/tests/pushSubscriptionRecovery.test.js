@@ -13,6 +13,27 @@ const now = new Date('2026-10-12T22:14:00Z')
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers() })
 
 describe('recuperación segura tras renovar Web Push', () => {
+  it('recupera un aviso de agenda al comenzar tras 410 y entrega solo una vez dentro de la tolerancia', async () => {
+    vi.useFakeTimers(); vi.setSystemTime('2026-10-13T02:50:00Z')
+    const repository = new ReminderMemory()
+    repository.events = [{ id: 2, user_id: 7, type: 'agenda', title: 'Agenda', event_date: '2026-10-13', event_time: '00:05', reminder_minutes: 0 }]
+    const send = vi.fn().mockRejectedValueOnce({ expired: true, deliveryCode: 'subscription_expired' }).mockResolvedValue(undefined)
+    await processReminderBatch({ repository, send }); vi.setSystemTime('2026-10-13T03:07:00Z'); await processReminderBatch({ repository, send })
+    const record = repository.records[0], reminder = repository.jobs[0]
+    expect(record).toMatchObject({ status: 'failed', attempts: 1, last_error_code: 'subscription_expired' })
+    record.update = async values => Object.assign(record, values); reminder.update = async values => Object.assign(reminder, values)
+    vi.spyOn(NotificationDelivery, 'findAll').mockImplementation(async options => {
+      const where = options.include[0].where
+      const temporal = where[Op.or][1]
+      expect(temporal.event_type).toBe('agenda')
+      expect(new Date(reminder.event_at) >= temporal.event_at[Op.gte]).toBe(true)
+      return [{ update: record.update, reminder }]
+    })
+    vi.setSystemTime('2026-10-13T03:08:00Z'); repository.devices = [{ ...subscription, id: 2 }]
+    await recoverExpiredPushDeliveries(repository.devices[0], transaction, new Date())
+    await processReminderBatch({ repository, send }); await processReminderBatch({ repository, send })
+    expect(record).toMatchObject({ status: 'sent', attempts: 2, subscription_id: 2 }); expect(send).toHaveBeenCalledTimes(2)
+  })
   it.each([true, false])('recupera sin duplicados y revalida enabled=%s en el worker', async enabled => {
     vi.useFakeTimers(); vi.setSystemTime('2026-10-12T11:00:00Z')
     const repository = new ReminderMemory()
@@ -60,7 +81,7 @@ describe('recuperación segura tras renovar Web Push', () => {
     expect(delivery.reminder.update).toHaveBeenCalledWith({ status: 'pending', cancellation_reason: null }, { transaction })
     const options = query.mock.calls[0][0]
     expect(options.where).toEqual({ device_id: 'device-a', status: 'failed', last_error_code: 'subscription_expired', subscription_hash: { [Op.ne]: subscriptionHash(subscription) }, attempts: { [Op.lt]: workerLimits.maxAttempts } })
-    expect(options.include[0].where).toEqual({ user_id: 7, status: { [Op.in]: ['pending', 'failed', 'processed'] }, due_at: { [Op.between]: [new Date(now.getTime() - workerLimits.catchUpMs), now] }, event_at: { [Op.gt]: now } })
+    expect(options.include[0].where).toEqual({ user_id: 7, status: { [Op.in]: ['pending', 'failed', 'processed'] }, due_at: { [Op.between]: [new Date(now.getTime() - workerLimits.catchUpMs), now] }, [Op.or]: [{ event_at: { [Op.gt]: now } }, { event_type: 'agenda', event_at: { [Op.gte]: new Date(now.getTime() - workerLimits.catchUpMs) } }] })
     expect(options).toMatchObject({ transaction, lock: 'UPDATE', limit: workerLimits.deliveries })
   })
 
@@ -69,12 +90,14 @@ describe('recuperación segura tras renovar Web Push', () => {
     { subscription_hash: subscriptionHash(subscription) }, { attempts: workerLimits.maxAttempts },
     { user_id: 8 }, { due_at: new Date(now.getTime() - workerLimits.catchUpMs - 1) },
     { due_at: new Date(now.getTime() + 1) }, { event_at: now }, { reminder_status: 'cancelled' },
+    { event_type: 'agenda', event_at: new Date(now.getTime() - workerLimits.catchUpMs - 1) },
   ])('excluye una entrega no recuperable: %j', async override => {
     const row = { device_id: 'device-a', status: 'failed', last_error_code: 'subscription_expired', subscription_hash: 'old-hash', attempts: 1, user_id: 7, due_at: new Date(now.getTime() - 60000), event_at: new Date(now.getTime() + 3600000), reminder_status: 'failed', ...override }
     const update = vi.fn()
     vi.spyOn(NotificationDelivery, 'findAll').mockImplementation(async options => {
       const w = options.where, r = options.include[0].where
-      const eligible = row.device_id === w.device_id && row.status === w.status && row.last_error_code === w.last_error_code && row.subscription_hash !== w.subscription_hash[Op.ne] && row.attempts < w.attempts[Op.lt] && row.user_id === r.user_id && r.status[Op.in].includes(row.reminder_status) && row.due_at >= r.due_at[Op.between][0] && row.due_at <= r.due_at[Op.between][1] && row.event_at > r.event_at[Op.gt]
+      const eligibleTime = row.event_at > r[Op.or][0].event_at[Op.gt] || row.event_type === r[Op.or][1].event_type && row.event_at >= r[Op.or][1].event_at[Op.gte]
+      const eligible = row.device_id === w.device_id && row.status === w.status && row.last_error_code === w.last_error_code && row.subscription_hash !== w.subscription_hash[Op.ne] && row.attempts < w.attempts[Op.lt] && row.user_id === r.user_id && r.status[Op.in].includes(row.reminder_status) && row.due_at >= r.due_at[Op.between][0] && row.due_at <= r.due_at[Op.between][1] && eligibleTime
       return eligible ? [{ update, reminder: { update } }] : []
     })
     await recoverExpiredPushDeliveries(subscription, transaction, now)

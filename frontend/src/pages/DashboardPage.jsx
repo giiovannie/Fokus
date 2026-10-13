@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { UpcomingAgenda } from '../components/common/UpcomingAgenda.jsx'
 import { PageHeader } from '../components/ui/PageHeader.jsx'
 import { StatCard } from '../components/ui/StatCard.jsx'
 import { useAppData } from '../hooks/useAppData.js'
@@ -47,6 +48,7 @@ const DashboardPage = () => {
           </section>
         </div>
       </div>
+      <UpcomingAgenda />
     </>
   )
 }

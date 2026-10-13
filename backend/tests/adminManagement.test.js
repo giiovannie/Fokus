@@ -1,7 +1,7 @@
 import request from 'supertest'
 import { beforeEach, afterEach, expect, it, vi } from 'vitest'
 import { app } from '../src/app.js'
-import { User, Profile, Subject, Teacher, AdminEvent, NotificationReminder, NotificationDelivery, NotificationWorkerState, NotificationPreference, NotificationPhrase, NotificationRule, PushSubscription, Task, Exam, StudyActivity, NotificationDismissal, sequelize } from '../src/models/index.js'
+import { AgendaEvent, User, Profile, Subject, Teacher, AdminEvent, NotificationReminder, NotificationDelivery, NotificationWorkerState, NotificationPreference, NotificationPhrase, NotificationRule, PushSubscription, Task, Exam, StudyActivity, NotificationDismissal, sequelize } from '../src/models/index.js'
 import { ReminderRepository } from '../src/services/reminderRepository.js'
 import { normalizeSubjectName } from '../src/controllers/adminSystem.controller.js'
 import { accountDeletionLimiter } from '../src/middlewares/rateLimit.middleware.js'
@@ -22,6 +22,7 @@ beforeEach(() => {
   vi.spyOn(ReminderRepository.prototype, 'withRunLock').mockImplementation(async action => action(vi.fn().mockResolvedValue(undefined)))
   vi.spyOn(AdminEvent, 'create').mockResolvedValue({})
   vi.spyOn(AdminEvent, 'update').mockResolvedValue([1])
+  vi.spyOn(AgendaEvent, 'findAll').mockResolvedValue([])
 })
 afterEach(() => vi.restoreAllMocks())
 

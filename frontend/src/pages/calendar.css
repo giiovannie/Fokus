@@ -1,0 +1,15 @@
+.calendar-view { width: auto; }
+.calendar-legend { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.calendar-legend > span, .calendar-count { display: inline-flex; align-items: center; gap: .3rem; }
+.calendar-mark { display: inline-block; width: .7rem; height: .7rem; border-radius: 50%; background: var(--activity-color); flex-shrink: 0; }
+.calendar-page .exam { --activity-color: #a56de2; }.calendar-page .task { --activity-color: #e78a24; }.calendar-page .personal { --activity-color: #579bed; }.calendar-page .academic { --activity-color: #45a86d; }
+.calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: .3rem; }
+.calendar-heading { text-align: center; font-weight: 600; }
+.calendar-day { min-height: 5.5rem; background: var(--bs-body-bg); color: var(--bs-body-color); border: 1px solid var(--bs-border-color); border-radius: .6rem; text-align: left; padding: .5rem; }
+.calendar-day[aria-current="date"] { box-shadow: inset 0 0 0 2px var(--bs-primary); }
+.calendar-day[aria-pressed="true"] { border-color: var(--bs-primary); background: var(--bs-primary-bg-subtle); }
+.calendar-day.outside { opacity: .65; }.calendar-day:focus-visible { outline: 3px solid var(--bs-primary); outline-offset: 2px; }
+.calendar-dots { display: flex; flex-wrap: wrap; gap: .3rem; font-size: .75rem; margin-top: .5rem; }
+.calendar-activity { display: flex; align-items: center; flex-wrap: wrap; gap: .6rem; width: 100%; text-align: left; padding: .8rem; background: transparent; color: inherit; border: 0; border-bottom: 1px solid var(--bs-border-color); }
+.calendar-activity > span { margin-left: auto; }.calendar-description { white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 575px) { .calendar-day { min-height: 4.5rem; padding: .3rem; }.calendar-count { gap: .15rem; }.calendar-mark { width: .5rem; height: .5rem; }.calendar-activity > span { width: 100%; margin-left: 0; }.calendar-grid { gap: .2rem; } }
