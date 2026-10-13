@@ -75,7 +75,7 @@ const SubjectsPage = () => {
                 const taskCount = data.tasks.filter(({ subject_id }) => subject_id === subject.id).length
                 return (
                   <div className="col-12 col-md-6" key={subject.id}>
-                    <article className="card subject-card border-0 h-100"><div className="card-body p-4">
+                    <article id={'subject-' + subject.id} tabIndex="-1" className="card subject-card border-0 h-100"><div className="card-body p-4">
                       <div className="subject-color mb-3" /><h2 className="h5">{subject.name}</h2>
                       <p className="text-secondary mb-3">Profesor/a: {teacher?.name ?? 'Sin asignar'}</p>
                       <span className="badge bg-light text-dark mb-4">{taskCount} tareas</span>
