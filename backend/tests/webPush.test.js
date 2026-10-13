@@ -3,7 +3,8 @@ import request from 'supertest'
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest'
 import webPush from 'web-push'
 import { app } from '../src/app.js'
-import { PushSubscription, NotificationPreference, NotificationPhrase, User, sequelize } from '../src/models/index.js'
+import { PushSubscription, NotificationDelivery, NotificationPreference, NotificationPhrase, User, sequelize } from '../src/models/index.js'
+import { ReminderRepository } from '../src/services/reminderRepository.js'
 import { getPushConfiguration, validatePushSubscription } from '../src/config/webPush.js'
 import { notificationDefaults } from '../src/config/notificationPreferences.js'
 vi.mock('../src/helpers/token.js', () => ({ verifyToken: token => { if (!['7', '8'].includes(token)) throw new Error(); return { sub: Number(token) } } }))
@@ -20,6 +21,9 @@ const register = (input = body, user = 7) => auth(request(app).post('/api/notifi
 const send = (id = 1, input = preview, user = 7) => auth(request(app).post('/api/notifications/push/test/' + id), user).send(input)
 beforeEach(() => {
   rows = []; nextId = 1
+  vi.spyOn(ReminderRepository.prototype, 'withRunLock').mockImplementation(action => action(async () => {}))
+  vi.spyOn(NotificationDelivery, 'findOne').mockResolvedValue(null)
+  vi.spyOn(NotificationDelivery, 'findAll').mockResolvedValue([])
   vi.stubEnv('VAPID_PUBLIC_KEY', vapid.publicKey); vi.stubEnv('VAPID_PRIVATE_KEY', vapid.privateKey); vi.stubEnv('VAPID_SUBJECT', 'mailto:push@example.test')
   vi.spyOn(sequelize, 'transaction').mockImplementation(fn => fn({ LOCK: { UPDATE: 'UPDATE' } }))
   vi.spyOn(User, 'findByPk').mockImplementation(async id => ({ id, role: 'student' }))
@@ -52,6 +56,20 @@ describe('VAPID y destinos seguros', () => {
   })
 })
 describe('Web Push autenticado y aislado', () => {
+  it('no registra un endpoint rechazado por el proveedor ni envía Push al renovarlo', async () => {
+    NotificationDelivery.findOne.mockResolvedValue({ id: 20, subscription_id: null })
+    expect((await register()).status).toBe(410)
+    expect(PushSubscription.create).not.toHaveBeenCalled()
+    expect(NotificationDelivery.findAll).not.toHaveBeenCalled()
+    expect(webPush.sendNotification).not.toHaveBeenCalled()
+  })
+  it('no modifica suscripciones cuando el worker mantiene el bloqueo', async () => {
+    ReminderRepository.prototype.withRunLock.mockResolvedValue({ skipped: 'busy' })
+    expect((await register()).status).toBe(503)
+    expect(sequelize.transaction).not.toHaveBeenCalled()
+    expect(PushSubscription.create).not.toHaveBeenCalled()
+    expect(webPush.sendNotification).not.toHaveBeenCalled()
+  })
   it('requiere JWT en configuración, registro, listado, eliminación y envío', async () => {
     for (const req of [request(app).get('/api/notifications/push/config'), request(app).get('/api/notifications/push/subscriptions'), request(app).post('/api/notifications/push/subscriptions'), request(app).delete('/api/notifications/push/subscriptions/1'), request(app).post('/api/notifications/push/test/1')]) expect((await req).status).toBe(401)
   })

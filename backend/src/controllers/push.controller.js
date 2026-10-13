@@ -7,6 +7,8 @@ import { createNotificationPreview } from './notification.controller.js'
 import { getPushConfiguration, validatePushSubscription } from '../config/webPush.js'
 import { createHttpError } from '../utils/httpError.js'
 import { pick } from '../utils/pick.js'
+import { ReminderRepository } from '../services/reminderRepository.js'
+import { assertSubscriptionNotExpired, recoverExpiredPushDeliveries } from '../services/pushSubscriptionRecovery.js'
 
 const serialize = row => pick(row, ['id', 'device_id', 'device_label', 'created_at', 'updated_at'])
 const configuration = () => {
@@ -28,7 +30,7 @@ export const listPushSubscriptions = async (req, res, next) => {
 export const savePushSubscription = async (req, res, next) => {
   try {
     configuration()
-    const saved = await withUserLock(req.user.id, async transaction => {
+    const result = await new ReminderRepository().withRunLock(async assertOwned => withUserLock(req.user.id, async transaction => {
       const { subscription, device_id, device_label = 'Este navegador' } = req.body
       const endpoint_hash = createHash('sha256').update(subscription.endpoint).digest('hex')
       const existing = await PushSubscription.findOne({ where: { endpoint_hash }, transaction })
@@ -36,11 +38,16 @@ export const savePushSubscription = async (req, res, next) => {
       if (existing && existing.device_id !== device_id) throw createHttpError(409, 'La suscripción pertenece a otro registro de navegador. Desactivala antes de registrarla de nuevo.')
       const row = await PushSubscription.findOne({ where: { user_id: req.user.id, device_id }, transaction })
       const data = { user_id: req.user.id, device_id, device_label, endpoint: subscription.endpoint, endpoint_hash, p256dh: subscription.keys.p256dh, auth: subscription.keys.auth }
-      if (row) return row.update(data, { transaction })
-      if (await PushSubscription.count({ where: { user_id: req.user.id }, transaction }) >= 10) throw createHttpError(409, 'Podés registrar hasta 10 dispositivos. Desactivá uno antes de agregar otro.')
-      return PushSubscription.create(data, { transaction })
-    })
-    return res.status(200).json(serialize(saved))
+      await assertSubscriptionNotExpired(data, transaction)
+      if (!row && await PushSubscription.count({ where: { user_id: req.user.id }, transaction }) >= 10) throw createHttpError(409, 'Podés registrar hasta 10 dispositivos. Desactivá uno antes de agregar otro.')
+      await assertOwned()
+      const saved = row ? await row.update(data, { transaction }) : await PushSubscription.create(data, { transaction })
+      await recoverExpiredPushDeliveries(saved, transaction)
+      await assertOwned()
+      return saved
+    }))
+    if (result?.skipped) throw createHttpError(503, 'Hay un lote de recordatorios en curso. Reintentá la activación en unos segundos.')
+    return res.status(200).json(serialize(result))
   } catch (error) { return next(error instanceof UniqueConstraintError ? createHttpError(409, 'La suscripción ya está registrada. Volvé a intentar.') : error) }
 }
 export const deletePushSubscription = async (req, res, next) => {
