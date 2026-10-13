@@ -20,6 +20,18 @@ beforeEach(() => {
 })
 afterEach(() => { vi.resetAllMocks(); vi.unstubAllGlobals(); localStorage.clear() })
 describe('recordatorios sencillos durante el uso de Fokus', () => {
+  it('ofrece permiso para agenda aunque exámenes y tareas estén desactivados', async () => {
+    getNotificationPreferences.mockResolvedValue({ enabled: true, exams_enabled: false, tasks_enabled: false })
+    mount(); await waitFor(() => expect(getPushConfig).toHaveBeenCalledOnce()); created('agenda')
+    expect(await screen.findByRole('button', { name: 'Permitir recordatorios' })).toBeInTheDocument()
+    expect(activatePush).not.toHaveBeenCalled()
+  })
+  it('sincroniza para agenda con autorización previa aunque no haya avisos de exámenes ni tareas', async () => {
+    localStorage.setItem('fokus-push-choice:7', 'authorized'); Notification.permission = 'granted'
+    getNotificationPreferences.mockResolvedValue({ enabled: true, exams_enabled: false, tasks_enabled: false })
+    mount(); await waitFor(() => expect(synchronizePush).toHaveBeenCalledOnce())
+    expect(activatePush).not.toHaveBeenCalled()
+  })
   it('ofrece tras crear un evento y pide activar solamente al hacer clic', async () => {
     mount(); await waitFor(() => expect(getPushConfig).toHaveBeenCalledOnce())
     expect(screen.queryByRole('button', { name: 'Permitir recordatorios' })).not.toBeInTheDocument()

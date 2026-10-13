@@ -4,7 +4,7 @@ import { EmptyState } from '../components/ui/EmptyState.jsx'
 import { PageHeader } from '../components/ui/PageHeader.jsx'
 import { ConfirmButton } from '../components/ui/ConfirmButton.jsx'
 import { TaskForm } from '../components/common/TaskForm.jsx'
-import { AssistedSubjectCreation } from '../components/common/AssistedSubjectCreation.jsx'
+import { SuccessState } from '../components/ui/FeedbackState.jsx'
 import { useAppData } from '../hooks/useAppData.js'
 import { formatDate } from '../utils/date.js'
 
@@ -17,11 +17,9 @@ const TasksPage = () => {
   const [form, setForm] = useState(initialForm)
   const [editingId, setEditingId] = useState(null)
   const [creating, setCreating] = useState(false)
-  const [assisting, setAssisting] = useState(null)
-  const assist = () => { setAssisting(creating ? 'modal' : 'inline'); setCreating(false) }
-  const returnToTask = () => { if (assisting === 'modal') setCreating(true); setAssisting(null) }
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState(null)
+  const [achievement, setAchievement] = useState(null)
   const [noteDrafts, setNoteDrafts] = useState({})
   const [editingNote, setEditingNote] = useState({ id: null, content: '' })
   const visibleTasks = useMemo(() => filter === 'all' ? data.tasks : data.tasks.filter(({ status }) => status === filter), [data.tasks, filter])
@@ -53,6 +51,7 @@ const TasksPage = () => {
       <PageHeader eyebrow="Planificación" title="Tareas" description="Seguí pendientes, avances y tareas completadas.">
         <button className="btn btn-primary" type="button" data-tour="task-create" onClick={() => { setForm(initialForm); setEditingId(null); setFormError(null); setCreating(true) }}>Crear tarea</button>
       </PageHeader>
+      {achievement && <SuccessState message={`¡Completaste «${achievement}»! Un pendiente menos.`} onDismiss={() => setAchievement(null)} />}
       <div className="row g-4">
         <div className={editingId ? "col-12 col-xl-8" : "col-12"}>
           <div className="d-flex flex-wrap gap-2 mb-3">
@@ -63,7 +62,7 @@ const TasksPage = () => {
               <div className="d-flex flex-column flex-md-row justify-content-between gap-3">
                 <div><span className={`badge status-${task.status} mb-2`}>{statusLabels[task.status]}</span><h2 className="h5 mb-1">{task.title}</h2><p className="text-secondary mb-2">{task.description}</p><small>{data.subjects.find(({ id }) => id === task.subject_id)?.name} · {formatDate(task.due_date)}</small></div>
                 <div className="d-flex flex-wrap align-content-start gap-2">
-                  <select className="form-select form-select-sm status-select" value={task.status} onChange={async (event) => { if (await updateItem('tasks', task.id, { status: event.target.value })) notify('Estado actualizado.') }} aria-label="Estado de tarea">{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+                  <select className="form-select form-select-sm status-select" value={task.status} onChange={async (event) => { const status = event.target.value; setAchievement(null); if (await updateItem('tasks', task.id, { status })) { notify('Estado actualizado.'); if (status === 'completed' && task.status !== 'completed') setAchievement(task.title) } }} aria-label="Estado de tarea">{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
                   <button className="btn btn-sm btn-outline-primary" onClick={() => { setEditingId(task.id); setForm({ title: task.title, description: task.description, due_date: task.due_date, subject_id: task.subject_id }) }} type="button">Editar</button>
                   <ConfirmButton message={`¿Eliminar la tarea ${task.title}?`} onConfirm={async () => { if (await removeItem('tasks', task.id)) notify('Tarea eliminada.', 'warning') }}>Eliminar</ConfirmButton>
                 </div>
@@ -72,12 +71,11 @@ const TasksPage = () => {
             </div></article>
           ))}
         </div>
-        {editingId && <div className="col-12 col-xl-4"><TaskForm editing={Boolean(editingId)} form={form} subjects={data.subjects} onCreateSubject={assist} onCancel={() => { setEditingId(null); setForm(initialForm) }} onChange={(field, value) => setForm({ ...form, [field]: value })} onSubmit={submit} /></div>}
+        {editingId && <div className="col-12 col-xl-4"><TaskForm editing={Boolean(editingId)} form={form} subjects={data.subjects} onCancel={() => { setEditingId(null); setForm(initialForm) }} onChange={(field, value) => setForm({ ...form, [field]: value })} onSubmit={submit} /></div>}
       </div>
       <FormModal open={creating} title="Crear tarea" formId="create-task-form" busy={saving} error={formError} onClose={() => setCreating(false)}>
-        <TaskForm inModal form={form} subjects={data.subjects} onCreateSubject={assist} onChange={(field, value) => setForm({ ...form, [field]: value })} onSubmit={submit} />
+        <TaskForm inModal form={form} subjects={data.subjects} onChange={(field, value) => setForm({ ...form, [field]: value })} onSubmit={submit} />
       </FormModal>
-      <AssistedSubjectCreation open={Boolean(assisting)} onReturn={returnToTask} onCreated={id => { setForm(current => ({ ...current, subject_id: String(id) })); returnToTask() }} />
     </>
   )
 }

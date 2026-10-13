@@ -65,13 +65,13 @@ export const processReminderBatch = async ({ repository, send, clock = Date.now,
         const delivery = await repository.deliveryFor(row, owned, clock())
         if (delivery.status !== 'pending' || delivery.attempts >= limits.maxAttempts || milliseconds(delivery.next_attempt_at) > clock()) continue
         const { event, preferences, phrases } = current.snapshot
-        let style = preferences[row.event_type + '_style']
+        let style = row.event_type === 'agenda' ? 'formal' : preferences[row.event_type + '_style']
         if (style === 'unfiltered' && !preferences.unfiltered_enabled || style === 'custom' && !phrases.length) style = 'formal'
         const candidates = style === 'custom' ? phrases.map(phrase => phrase.content) : notificationTemplates[row.event_type][style]
         const selectedText = candidates?.includes(row.last_phrase) ? row.last_phrase : undefined
         const message = buildNotificationMessage({ eventType: row.event_type, style, phrases, selectedText,
           previousText: await repository.previousPhrase(row), unfilteredEnabled: preferences.unfiltered_enabled,
-          event: { title: event.title, subject: event.subject.name, ...current.plan.effective } })
+          event: { title: event.title, subject: event.subject?.name || '', ...current.plan.effective } })
         await repository.updateReminder(row, { last_phrase: message.phrase })
         if (!await repository.claimDelivery(delivery, clock())) continue
         if (eventHasExpired(row.event_type, milliseconds(row.event_at), clock())) {
@@ -84,7 +84,7 @@ export const processReminderBatch = async ({ repository, send, clock = Date.now,
         report.deliveriesAttempted++
         try {
           await assertOwned()
-          await send(owned, message, { id: 'reminder-' + row.id + '-' + delivery.id, ttl: Math.max(0, Math.min(300, Math.floor((milliseconds(row.event_at) - clock()) / 1000))), timeout: Math.max(1, Math.min(10000, deadline - clock())) })
+          await send(owned, message, { id: 'reminder-' + row.id + '-' + delivery.id, ttl: Math.max(0, Math.min(300, Math.floor((milliseconds(row.event_at) + (row.event_type === 'agenda' ? limits.catchUpMs : 0) - clock()) / 1000))), timeout: Math.max(1, Math.min(10000, deadline - clock())) })
           await repository.finishDelivery(delivery, { status: 'sent', sent_at: new Date(clock()), last_error_code: null }); report.sent++
         } catch (error) {
           if (error.expired) await repository.expireSubscription(owned)
@@ -114,8 +114,9 @@ export const processReminderBatch = async ({ repository, send, clock = Date.now,
     if (!timeAvailable()) break
     await repository.advanceUser(preferences.user_id)
     if (!preferences.enabled) continue
-    for (const type of ['exam', 'task']) {
-      if (!preferences[type === 'exam' ? 'exams_enabled' : 'tasks_enabled']) continue
+    for (const type of ['exam', 'task', 'agenda']) {
+      if (!timeAvailable()) break
+      if (type !== 'agenda' && !preferences[type === 'exam' ? 'exams_enabled' : 'tasks_enabled']) continue
       for (const event of await repository.nextEvents(preferences.user_id, type, preferences.timezone, clock(), limits.eventsPerType)) {
         if (!timeAvailable()) break
         await assertOwned()

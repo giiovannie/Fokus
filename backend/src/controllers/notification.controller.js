@@ -3,7 +3,8 @@ import { createHttpError } from '../utils/httpError.js'
 import { buildNotificationMessage } from '../utils/notificationMessages.js'
 import { notificationDefaults } from '../config/notificationPreferences.js'
 import { Op } from 'sequelize'
-import { Exam, StudyActivity, Subject, Task, NotificationPreference, NotificationPhrase, NotificationDismissal } from '../models/index.js'
+import { AgendaEvent, Exam, StudyActivity, Subject, Task, NotificationPreference, NotificationPhrase, NotificationDismissal } from '../models/index.js'
+import { localPlanningDates } from '../services/reminderTime.js'
 import { addDays, calculateDaysRemaining, todayDate } from '../utils/date.js'
 
 const remainingText = (days) => days === 0 ? 'hoy' : `en ${days} ${days === 1 ? 'día' : 'días'}`
@@ -34,7 +35,8 @@ export const buildInbox = async userId => {
       attributes: ['name'],
     }]
 
-    const [tasks, exams, activities] = await Promise.all([
+    const localToday = localPlanningDates(Date.now(), preferences.timezone)[0]
+    const [tasks, exams, activities, agenda] = await Promise.all([
       Task.findAll({
         where: { due_date: { [Op.between]: [today, limit] }, status: { [Op.ne]: 'completed' } },
         attributes: ['id', 'title', 'due_date', 'due_time'],
@@ -53,9 +55,11 @@ export const buildInbox = async userId => {
         include: includeSubject(),
         order: [['id', 'ASC']],
       }),
+      AgendaEvent.findAll({ where: { user_id: userId, event_date: { [Op.between]: [localToday, addDays(localToday, 7)] }, event_time: { [Op.ne]: null }, reminder_minutes: { [Op.ne]: null } }, include: [{ model: Subject, as: 'subject', required: false, where: { user_id: userId }, attributes: ['name'] }], order: [['event_date', 'ASC'], ['id', 'ASC']], limit: 500 }),
     ])
 
     const notifications = [
+      ...agenda.map(event => ({ type: 'agenda', source_id: event.id, date: event.event_date, message: buildNotificationMessage({ eventType: 'agenda', event: { title: event.title, subject: event.subject?.name, date: event.event_date, time: event.event_time, timezone: preferences.timezone } }).body })),
       ...tasks.map((task, index) => ({
         type: 'task', source_id: task.id,
         message: eventMessage('task', task, index),

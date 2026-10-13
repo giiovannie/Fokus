@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { PageHeader } from '../components/ui/PageHeader.jsx'
 import { EmptyState } from '../components/ui/EmptyState.jsx'
 import { ActivityWheel } from '../components/common/ActivityWheel.jsx'
+import { OwlMark } from '../components/common/OwlMark.jsx'
 import { useAppData } from '../hooks/useAppData.js'
 import { buildRouletteOptions, nextRouletteComment, randomIndex, winningRotation } from '../utils/roulette.js'
 import '../styles/roulette.css'
@@ -64,7 +65,7 @@ export const RoulettePage = () => {
         <button className="btn btn-primary btn-lg px-4" type="button" disabled={spinning || !selected.length} aria-describedby="roulette-instructions" onClick={spin}>{spinning ? 'Girando…' : 'Girar ruleta'}</button>
         <div className="roulette-comment mt-3" aria-live="polite" aria-atomic="true">{comments && <p className="mb-0">{comment}</p>}</div>
         <div className="form-check form-switch d-inline-flex align-items-center gap-2 mt-2"><input id="roulette-comments" className="form-check-input" type="checkbox" checked={comments} onChange={event => setComments(event.target.checked)} /><label className="form-check-label small" htmlFor="roulette-comments">Comentarios de la ruleta</label></div>
-        <div role="status" aria-live="polite" aria-atomic="true">{winner && <div className="roulette-result mt-4 p-3"><p className="small mb-1">Tu próxima actividad · {typeLabels[winner.type]}</p><h3 className="h5">{winner.label}</h3>{winner.subject && <p className="small text-secondary">{winner.subject}</p>}{availableWinner ? <Link className="btn btn-outline-primary" to={winner.href}>Ir a la actividad</Link> : <p className="small mb-0">Esta actividad ya no está disponible. Volvé a elegir tus opciones.</p>}</div>}</div>
+        <div role="status" aria-live="polite" aria-atomic="true">{winner && <div className="roulette-result mt-4 p-3"><OwlMark variant="welcome" className="mascot-context mb-2" /><p className="small mb-1">Tu próxima actividad · {typeLabels[winner.type]}</p><h3 className="h5">{winner.label}</h3>{winner.subject && <p className="small text-secondary">{winner.subject}</p>}{availableWinner ? <Link className="btn btn-outline-primary" to={winner.href}>Ir a la actividad</Link> : <p className="small mb-0">Esta actividad ya no está disponible. Volvé a elegir tus opciones.</p>}</div>}</div>
       </div></section></div>
       <div className="col-12 col-lg-5"><section className="card border-0"><div className="card-body p-3 p-sm-4">
         <h2 className="h5">¿Qué entra en el giro?</h2><p className="small text-secondary">Materias, tareas y exámenes de tu cuenta, sin opciones duplicadas.</p>

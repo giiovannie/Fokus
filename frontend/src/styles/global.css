@@ -426,6 +426,11 @@ a {
 /* Animaciones ligeras: la marca permanece montada durante la navegación. */
 .owl-mark { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .owl-mark img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.mascot-context { width: 8rem; height: 8rem; max-width: 100%; }
+.dashboard-welcome { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+.mascot-success { display: flex; align-items: center; flex-wrap: wrap; gap: 1rem; }
+.mascot-success p { flex: 1; min-width: 10rem; }
+@media (max-width: 575px) { .mascot-context { width: 6rem; height: 6rem; }.dashboard-welcome { align-items: flex-start; }.dashboard-welcome .mascot-context { width: 4rem; height: 4rem; } }
 .owl-welcome { animation: owl-welcome 900ms ease-out both; transform-origin: center bottom; }
 @keyframes owl-welcome {
   0% { opacity: 0; transform: translateY(5px) rotate(-7deg); }

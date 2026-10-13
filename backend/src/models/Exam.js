@@ -9,6 +9,6 @@ const Exam = sequelize.define('Exam', {
   topics: { type: DataTypes.TEXT },
   grade: { type: DataTypes.DECIMAL(4, 2), validate: { min: 0, max: 10 } },
   subject_id: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false },
-}, { tableName: 'exams' })
+}, { tableName: 'exams', indexes: [{ name: 'exam_subject_date', fields: ['subject_id', 'exam_date', 'id'] }] })
 
 export { Exam }

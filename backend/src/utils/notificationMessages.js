@@ -1,5 +1,6 @@
 // Texto plano compartido por la API y la vista previa; nunca interpreta HTML.
 export const notificationTemplates = {
+  agenda: { formal: ['Te recordamos tu próxima actividad.'] },
   exam: {
     formal: ['Le recordamos su próximo examen.', 'Tiene un examen próximo. Prepare el material.', 'Consulte los datos de su próxima evaluación.'],
     friendly: ['¡Se acerca tu examen! Vamos paso a paso.', 'Un repasito hoy te puede ayudar mañana.', 'Te acompañamos: tu próximo examen está cerca.'],
@@ -16,6 +17,11 @@ export const notificationTemplates = {
   },
 }
 export const buildNotificationMessage = ({ eventType, style = 'formal', phrases = [], event, previousText, selectedText, random = Math.random, unfilteredEnabled = false, test = false }) => {
+  if (eventType === 'agenda') {
+    const [year, month, day] = event.date.split('-')
+    const phrase = notificationTemplates.agenda.formal[0]
+    return { title: 'Fokus · Actividad de agenda', phrase, body: `${phrase}\n${event.title}.${event.subject ? ' Materia: ' + event.subject + '.' : ''} Fecha: ${day}/${month}/${year}. Hora: ${event.time} (${event.timezone}).` }
+  }
   if (!['exam', 'task'].includes(eventType)) throw new Error('Elegí examen o entrega.')
   if (style === 'unfiltered' && !unfilteredEnabled) throw new Error('Aceptá explícitamente los mensajes sin filtro antes de probarlos.')
   const candidates = style === 'custom' ? phrases.filter(phrase => phrase.event_type === eventType).map(phrase => phrase.content)

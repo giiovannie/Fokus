@@ -5,7 +5,6 @@ import { PageHeader } from '../components/ui/PageHeader.jsx'
 import { Avatar } from '../components/common/Avatar.jsx'
 import { useAppData } from '../hooks/useAppData.js'
 import { useAuth } from '../hooks/useAuth.js'
-import { OPEN_TUTORIAL_EVENT } from '../services/onboarding.service.js'
 
 const ProfilePage = () => {
   const { data, updateProfile, uploadProfileImage, notify } = useAppData()
@@ -79,7 +78,6 @@ const ProfilePage = () => {
         </div></fieldset>{isSaving && <p className="mt-3" role="status">Guardando el perfil y la foto seleccionada…</p>}{feedback && <p className={`mt-3 text-${feedback.error ? 'danger' : 'success'}`} role={feedback.error ? 'alert' : 'status'}>{feedback.message}</p>}</form></div></div></div>
       </div>
       <AccountDangerZone />
-      <section className="card border-0 mt-4"><div className="card-body p-4"><h2 className="h5">Ayuda</h2><p>Repasá las secciones de Fokus o retomá tu recorrido.</p><button className="btn btn-outline-primary" disabled={!data.profile.id} onClick={() => window.dispatchEvent(new Event(OPEN_TUTORIAL_EVENT))}>Ver tutorial</button></div></section>
     </>
   )
 }

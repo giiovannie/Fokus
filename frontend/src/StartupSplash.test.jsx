@@ -10,7 +10,7 @@ describe('apertura antes de cargar React', () => {
     expect(splash.getAttribute('role')).toBe('status')
     expect(splash.getAttribute('aria-live')).toBe('polite')
     expect(splash.textContent).toContain('Preparando todo...')
-    expect(splash.querySelector('img').getAttribute('src')).toBe('/icons/fokus-logo.png')
+    expect(splash.querySelector('img').getAttribute('src')).toBe('/mascotas/buho-mirada-fija-160.webp')
     expect(splash.querySelector('.boot-dots').getAttribute('aria-hidden')).toBe('true')
     expect(html).toContain('prefers-reduced-motion: reduce')
     expect(html).toContain('html[data-bs-theme="dark"]')

@@ -19,11 +19,12 @@ export class ReminderMemory {
   async recoverInterrupted(limit) { for (const row of this.records.filter(row => row.status === 'processing').slice(0, limit)) Object.assign(row, { status: 'failed', last_error_code: 'delivery_uncertain' }) }
   async nextUsers(limit) { return copy(this.users.slice(0, limit)) }
   async advanceUser() {}
-  async nextEvents(user, type, timezone, now, limit) { return copy(this.events.filter(row => row.subject.user_id === user && row.type === type).slice(0, limit)) }
+  async nextEvents(user, type, timezone, now, limit) { return copy(this.events.filter(row => (row.user_id ?? row.subject?.user_id) === user && row.type === type).slice(0, limit)) }
   async advanceEvent() {}
-  async snapshot(user, type, id) { return copy({ event: this.events.find(row => row.id === id && row.type === type && row.subject.user_id === user), preferences: this.users.find(row => row.user_id === user) || notificationDefaults, rules: this.rules.filter(row => row.user_id === user && row.event_type === type), phrases: this.phrases.filter(row => row.user_id === user && row.event_type === type) }) }
+  async snapshot(user, type, id) { return copy({ event: this.events.find(row => row.id === id && row.type === type && (row.user_id ?? row.subject?.user_id) === user), preferences: this.users.find(row => row.user_id === user) || notificationDefaults, rules: this.rules.filter(row => row.user_id === user && row.event_type === type), phrases: this.phrases.filter(row => row.user_id === user && row.event_type === type) }) }
   async planEvent(user, type, event, plans, source_hash) {
     for (const plan of plans) {
+      if (type === 'agenda' && plan.due_at.getTime() <= Date.now()) continue
       let row = this.jobs.find(row => row.user_id === user && row.event_type === type && row.event_id === event.id && row.offset_minutes === plan.offset_minutes)
       if (!row) { row = { id: this.jobs.length + 1, user_id: user, event_type: type, event_id: event.id, offset_minutes: plan.offset_minutes, status: 'pending', last_phrase: null }; this.jobs.push(row) }
       if (['pending', 'cancelled'].includes(row.status)) Object.assign(row, { due_at: plan.due_at, event_at: plan.event_at, source_hash, status: 'pending', cancellation_reason: null })

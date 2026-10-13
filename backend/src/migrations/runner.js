@@ -21,7 +21,7 @@ export const loadMigrations = async () => {
     const url = new URL(name, directory)
     const source = await readFile(url)
     const { table, columns, previousColumns, indexes = [], kind = 'create_table' } = await import(url.href)
-    if (!['create_table', 'add_columns', 'extend_enum', 'relax_nullability'].includes(kind)) throw new MigrationError('Tipo de migración desconocido')
+    if (!['create_table', 'add_columns', 'extend_enum', 'relax_nullability', 'add_indexes'].includes(kind)) throw new MigrationError('Tipo de migración desconocido')
     const checksum = migrationChecksum(source, helper)
     return { name, checksum, table, columns, previousColumns, indexes, kind }
   }))
@@ -83,8 +83,8 @@ const readState = async (query, migrations) => {
     for (const [name, column] of Object.entries(expected)) {
       const field = fields.find(value => value.Field === name)
       const enumType = 'enum(' + column.type.values.map(value => "'" + value + "'").join(',') + ')'
-      if (!field || field.Type.toLowerCase() !== enumType || field.Null !== 'NO' || field.Default !== column.defaultValue) {
-        throw new MigrationError('Los estilos de notificación no coinciden con el historial; revisar migración parcial')
+      if (!field || field.Type.toLowerCase() !== enumType || field.Null !== 'NO' || field.Default !== (column.defaultValue ?? null)) {
+        throw new MigrationError('Los enums de notificación no coinciden con el historial; revisar migración parcial')
       }
     }
   }
@@ -102,6 +102,18 @@ const readState = async (query, migrations) => {
       if (!field || field.Type.toLowerCase() !== 'date' || field.Default !== null || field.Null !== (index < applied.length ? 'YES' : 'NO')) {
         throw new MigrationError('Nulabilidad incompatible o migración parcial; detener el despliegue')
       }
+    }
+  }
+  for (const [index, item] of migrations.entries()) {
+    if (item.kind !== 'add_indexes') continue
+    const actualTable = findTable(item.table)
+    if (!actualTable) continue
+    const actual = await query('SHOW INDEX FROM `' + actualTable.replaceAll('`', '``') + '`')
+    for (const expected of item.indexes) {
+      if (!/^[a-z_]+$/.test(expected.name) || !expected.fields.length || expected.fields.some(field => !/^[a-z_]+$/.test(field))) throw new MigrationError('Índice inválido')
+      const rows = actual.filter(row => row.Key_name === expected.name).sort((a, b) => a.Seq_in_index - b.Seq_in_index)
+      if (index >= applied.length && rows.length) throw new MigrationError('Índice parcialmente aplicado sin historial; detener el despliegue')
+      if (index < applied.length && (rows.length !== expected.fields.length || rows.some((row, position) => row.Column_name !== expected.fields[position] || Number(row.Non_unique) !== 1 || row.Sub_part != null || row.Index_type !== 'BTREE'))) throw new MigrationError('Índice incompatible con el historial')
     }
   }
   return { applied, pending, tables, historyTable }
@@ -158,7 +170,10 @@ export const migrate = async (sequelize) => {
     // MySQL DDL no permite rollback de todo el lote. Registrar cada tabla solo
     // después de crearla; cualquier fallo detiene el proceso sin eliminar datos.
     for (const item of state.pending) {
-      if (['add_columns', 'extend_enum', 'relax_nullability'].includes(item.kind)) {
+      if (item.kind === 'add_indexes') {
+        const generator = sequelize.getQueryInterface().queryGenerator
+        await query('ALTER TABLE ' + generator.quoteTable(item.table) + ' ' + item.indexes.map(index => 'ADD INDEX ' + generator.quoteIdentifier(index.name) + ' (' + index.fields.map(field => generator.quoteIdentifier(field)).join(', ') + ')').join(', '))
+      } else if (['add_columns', 'extend_enum', 'relax_nullability'].includes(item.kind)) {
         const generator = sequelize.getQueryInterface().queryGenerator
         const definitions = Object.entries(item.columns()).map(([name, column]) =>
           (item.kind === 'add_columns' ? 'ADD COLUMN ' : 'MODIFY COLUMN ') + generator.quoteIdentifier(name) + ' ' + generator.attributeToSQL(sequelize.normalizeAttribute(column), { context: 'addColumn' }))

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { Op } from 'sequelize'
-import { User, NotificationPreference, NotificationRule, NotificationPhrase, NotificationReminder, NotificationDelivery, NotificationWorkerState, PushSubscription, Exam, Task, Subject, sequelize } from '../models/index.js'
+import { User, NotificationPreference, NotificationRule, NotificationPhrase, NotificationReminder, NotificationDelivery, NotificationWorkerState, PushSubscription, Exam, Task, Subject, AgendaEvent, sequelize } from '../models/index.js'
 import { withUserLock } from '../utils/withUserLock.js'
 import { localPlanningDates } from './reminderTime.js'
 import { notificationDefaults } from '../config/notificationPreferences.js'
@@ -52,10 +52,10 @@ export class ReminderRepository {
   async advanceUser(userId) { await (await this.cursor('users')).update({ cursor: userId }) }
   async nextEvents(userId, type, timezone, now, limit) {
     const state = await this.cursor('events:' + userId + ':' + type)
-    const model = type === 'exam' ? Exam : Task
+    const model = type === 'agenda' ? AgendaEvent : type === 'exam' ? Exam : Task
     const dates = localPlanningDates(now, timezone)
-    const load = cursor => model.findAll({ where: { id: { [Op.gt]: cursor }, [type === 'exam' ? 'exam_date' : 'due_date']: { [Op.between]: dates } },
-      include: [{ model: Subject, as: 'subject', where: { user_id: userId }, attributes: ['name', 'user_id'] }], order: [['id', 'ASC']], limit })
+    const load = cursor => model.findAll({ where: { id: { [Op.gt]: cursor }, [type === 'agenda' ? 'event_date' : type === 'exam' ? 'exam_date' : 'due_date']: { [Op.between]: dates }, ...(type === 'agenda' ? { user_id: userId } : {}) },
+      include: [{ model: Subject, as: 'subject', where: { user_id: userId }, ...(type === 'agenda' ? { required: false } : {}), attributes: ['name', 'user_id'] }], order: [['id', 'ASC']], limit })
     let rows = await load(state.cursor)
     if (!rows.length && state.cursor) { await state.update({ cursor: 0 }); rows = await load(0) }
     return rows.map(plain)
@@ -64,18 +64,19 @@ export class ReminderRepository {
   async snapshot(userId, type, eventId) {
     const user = await User.findByPk(userId, { attributes: ['id', 'role', 'status'] })
     if (!user || user.role !== 'student' || user.status === 'suspended') return { event: null, preferences: notificationDefaults, rules: [], phrases: [] }
-    const model = type === 'exam' ? Exam : Task
+    const model = type === 'agenda' ? AgendaEvent : type === 'exam' ? Exam : Task
     const [event, preferences, rules, phrases] = await Promise.all([
-      model.findOne({ where: { id: eventId }, include: [{ model: Subject, as: 'subject', where: { user_id: userId }, attributes: ['name', 'user_id'] }] }),
+      model.findOne({ where: { id: eventId, ...(type === 'agenda' ? { user_id: userId } : {}) }, include: [{ model: Subject, as: 'subject', where: { user_id: userId }, ...(type === 'agenda' ? { required: false } : {}), attributes: ['name', 'user_id'] }] }),
       NotificationPreference.findOne({ where: { user_id: userId } }),
-      NotificationRule.findAll({ where: { user_id: userId, event_type: type } }),
-      NotificationPhrase.findAll({ where: { user_id: userId, event_type: type } }),
+      type === 'agenda' ? [] : NotificationRule.findAll({ where: { user_id: userId, event_type: type } }),
+      type === 'agenda' ? [] : NotificationPhrase.findAll({ where: { user_id: userId, event_type: type } }),
     ])
     return { event: plain(event), preferences: { ...notificationDefaults, ...plain(preferences) }, rules: rules.map(plain), phrases: phrases.map(plain) }
   }
   async planEvent(userId, type, event, plans, sourceHash) {
     return withUserLock(userId, async transaction => {
       for (const plan of plans) {
+        if (type === 'agenda' && plan.due_at.getTime() <= Date.now()) continue
         const identity = { user_id: userId, event_type: type, event_id: event.id, offset_minutes: plan.offset_minutes }
         const [row] = await NotificationReminder.findOrCreate({ where: identity, defaults: { due_at: plan.due_at, event_at: plan.event_at, source_hash: sourceHash }, transaction })
         if (['pending', 'cancelled'].includes(row.status)) await row.update({ due_at: plan.due_at, event_at: plan.event_at, source_hash: sourceHash, status: 'pending', cancellation_reason: null }, { transaction })
