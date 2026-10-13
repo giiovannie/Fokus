@@ -90,3 +90,92 @@ Después, y con nueva aprobación, integrar la rama en develop y coordinar despl
 normal. Este código usa agenda_events también en bandeja: no puede publicarse el
 backend antes del esquema. Tras publicar, una prueba Android/Push real requiere
 autorización específica; las pruebas con mocks no confirman entrega al celular.
+
+## Respaldo recuperable: evidencia y ensayo previos
+
+La existencia de un plan de respaldo no demuestra la recuperabilidad del servicio
+actual. La verificación quedó pendiente: esta sesión no tiene credenciales de
+Aiven ni evidencia del panel Backups, y no se leyó `.env`. Tampoco se confirmó el
+estado actual aplicado/pendiente mediante una conexión real. No considerar esta
+preparación como autorización para ejecutar.
+
+La documentación de [respaldos MySQL de Aiven](https://aiven.io/docs/products/mysql/concepts/mysql-backups)
+describe respaldo completo y binlogs para PITR, con retención según plan. También
+advierte que el respaldo puede bloquear DDL y que sus ALTER INSTANT pueden usar
+INPLACE/COPY. No forzar INSTANT ni prometer ausencia de bloqueos por el soporte
+genérico de MySQL. Esperar a que finalice cualquier respaldo activo antes del DDL.
+
+Antes de aplicar, el operador debe registrar sin credenciales:
+
+1. En Console → servicio → Backups → Backup management: identificar el servicio,
+   estado completado del último respaldo, fecha UTC, retención y ventana PITR
+   realmente disponibles en su plan. Si no existe respaldo utilizable, detener.
+2. Tras detener todos los escritores con autorización, registrar `T0` en UTC.
+   Verificar que los binlogs recuperables cubran T0 antes de iniciar DDL; o disponer
+   de un respaldo completo tomado sin escrituras que represente ese mismo estado.
+3. Preparar restauración usando el respaldo elegido, su T0 y un destino separado,
+   restringido, sin aplicaciones, QStash ni trabajadores conectados. El flujo de
+   [Fork & restore](https://aiven.io/docs/products/mysql/howto/fork-service) crea
+   otro servicio y copia bases/usuarios: requiere autorización propia, control de
+   acceso y costos. No se crea ni restaura ningún servicio en esta tarea.
+4. Ensayar allí la recuperación, comprobar que termina correctamente, conexión
+   TLS, historial/checksums y estructura, y comparar conteos o integridad en un
+   informe sin datos personales. Registrar respaldo elegido, tiempo recuperado,
+   resultado y duración de restauración. No reutilizar esa copia con datos reales
+   para la prueba de migraciones: MySQL8.4 aislado debe contener solo datos ficticios.
+5. Conservar ruta de recuperación ensayada y decisión operativa de retorno. Ante
+   DDL parcial detener primero; restaurar y redirigir servicios exige otra decisión
+   autorizada. Un backup no convierte el lote de DDL en una transacción reversible.
+
+No se creó un respaldo, no se verificó su fecha/retención y no se ensayó una
+restauración durante esta revisión. Es un requisito pendiente, no un riesgo aceptado.
+
+## Comprobación de lectura preparada
+
+Se preparó fuera del repositorio, reutilizando el ingreso seguro anterior:
+
+```powershell
+& 'C:\Users\ivane\AppData\Local\Temp\fokus-calendar-migrations-24-27\inspect.ps1'
+```
+
+Solicita host, puerto, usuario y ruta de CA existentes; contraseña oculta enviada
+por stdin, sin guardarla ni imprimirla. No lee `.env`. El módulo exige destino
+defaultdb, versión8.4, certificado CA vigente, identidad verificada y cifrado TLS.
+Solo permite SELECT/SHOW, sin locks de escritura, DDL, consultas de datos personales
+ni reintentos automáticos. Compara todos los checksums actuales y detecta objetos
+parciales usando el runner del proyecto. Emite estados24–27 y metadatos de tipos,
+defaults, índices, FK y motores. Esta consulta NO fue ejecutada contra producción
+por falta de acceso en la sesión; el operador debe aportar su salida JSON segura.
+La sintaxis y el guard de lectura se comprobaron offline, sin conexión.
+
+## Consultas posteriores de verificación (solo lectura)
+
+Además de `status` y `verify`, comprobar con la misma conexión segura:
+
+```sql
+SELECT COUNT(*) AS applied FROM FokusMigrations;
+SELECT name, checksum FROM FokusMigrations ORDER BY name;
+SELECT TABLE_NAME, COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT
+FROM information_schema.COLUMNS
+WHERE TABLE_SCHEMA = DATABASE()
+  AND (TABLE_NAME = 'agenda_events'
+    OR (TABLE_NAME = 'notification_reminders' AND COLUMN_NAME = 'event_type'))
+ORDER BY TABLE_NAME, ORDINAL_POSITION;
+SELECT TABLE_NAME, INDEX_NAME, NON_UNIQUE, SEQ_IN_INDEX, COLUMN_NAME, SUB_PART, INDEX_TYPE
+FROM information_schema.STATISTICS
+WHERE TABLE_SCHEMA = DATABASE()
+  AND (TABLE_NAME = 'agenda_events'
+    OR (TABLE_NAME = 'exams' AND INDEX_NAME = 'exam_subject_date')
+    OR (TABLE_NAME = 'tasks' AND INDEX_NAME = 'task_subject_date')
+    OR (TABLE_NAME = 'notification_reminders' AND NON_UNIQUE = 0))
+ORDER BY TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX;
+SELECT TABLE_NAME, CONSTRAINT_NAME, REFERENCED_TABLE_NAME, UPDATE_RULE, DELETE_RULE
+FROM information_schema.REFERENTIAL_CONSTRAINTS
+WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'agenda_events';
+```
+
+Exigir27 hashes correctos; agenda_user_date y ambos índices secundarios con orden
+exacto y sin unicidad/prefijo; la identidad única original de recordatorios
+conservada; enum exam/task/agenda, FK hacia users CASCADE y subjects SET NULL,
+ambas ON UPDATE CASCADE. Verificar también las columnas relacionadas de las FK
+con SHOW CREATE TABLE agenda_events, sin asumir que basta ver el nombre de tabla.
