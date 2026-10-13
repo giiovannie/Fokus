@@ -16,6 +16,7 @@ import { NotificationsPage } from '../pages/NotificationsPage.jsx'
 import { ProfilePage } from '../pages/ProfilePage.jsx'
 import { RegisterPage } from '../pages/RegisterPage.jsx'
 import { StudyPage } from '../pages/StudyPage.jsx'
+import { RoulettePage } from '../pages/RoulettePage.jsx'
 import { SubjectsPage } from '../pages/SubjectsPage.jsx'
 import { TasksPage } from '../pages/TasksPage.jsx'
 import { ProtectedRoute } from './ProtectedRoute.jsx'
@@ -40,6 +41,7 @@ const AppRoutes = () => (
         <Route path="tasks" element={<TasksPage />} />
         <Route path="exams" element={<ExamsPage />} />
         <Route path="study" element={<StudyPage />} />
+        <Route path="roulette" element={<RoulettePage />} />
         <Route path="notifications/preferences" element={<NotificationPreferencesPage />} />
         <Route path="notifications" element={<NotificationsPage />} />
         <Route path="profile" element={<ProfilePage />} />

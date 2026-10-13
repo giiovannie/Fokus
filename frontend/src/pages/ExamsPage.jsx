@@ -44,7 +44,7 @@ const ExamsPage = () => {
             <div className="row g-3">{data.exams.map((exam) => {
               const days = daysRemaining(exam.exam_date)
               const subject = data.subjects.find(({ id }) => id === exam.subject_id)
-              return <div className="col-12 col-md-6" key={exam.id}><article className="card border-0 exam-card h-100"><div className="card-body p-4">
+              return <div className="col-12 col-md-6" key={exam.id}><article id={'exam-' + exam.id} tabIndex="-1" className="card border-0 exam-card h-100"><div className="card-body p-4">
                 <div className="d-flex justify-content-between gap-2 mb-3"><span className="small text-secondary">{subject?.name}</span>{exam.grade !== null ? <span className="grade-badge">Nota {exam.grade}</span> : <span className={`badge text-bg-${urgencyClass(days)}`}>{days < 0 ? 'Realizado' : days === 0 ? 'Hoy' : `${days} días`}</span>}</div>
                 <h2 className="h5">{exam.title}</h2><p className="text-secondary small">{exam.topics}</p><p className="fw-semibold">{formatDate(exam.exam_date)}</p>
                 <ExamGradeModal exam={exam} subject={subject?.name} onSave={grade => updateItem('exams', exam.id, { grade })} onSuccess={() => notify('Calificación guardada.')} />

@@ -55,7 +55,7 @@ const TasksPage = () => {
             {[['all', 'Todas'], ['pending', 'Pendientes'], ['in_progress', 'En progreso'], ['completed', 'Completadas']].map(([value, label]) => <button className={`btn btn-sm ${filter === value ? 'btn-primary' : 'btn-light'}`} key={value} onClick={() => setFilter(value)} type="button">{label}</button>)}
           </div>
           {visibleTasks.length === 0 ? <EmptyState title="No hay tareas aquí" message="Cambiá el filtro o creá una tarea." /> : visibleTasks.map((task) => (
-            <article className={`card border-0 mb-3 task-card ${task.status === 'completed' ? 'is-complete' : ''}`} key={task.id}><div className="card-body p-4">
+            <article id={'task-' + task.id} tabIndex="-1" className={`card border-0 mb-3 task-card ${task.status === 'completed' ? 'is-complete' : ''}`} key={task.id}><div className="card-body p-4">
               <div className="d-flex flex-column flex-md-row justify-content-between gap-3">
                 <div><span className={`badge status-${task.status} mb-2`}>{statusLabels[task.status]}</span><h2 className="h5 mb-1">{task.title}</h2><p className="text-secondary mb-2">{task.description}</p><small>{data.subjects.find(({ id }) => id === task.subject_id)?.name} · {formatDate(task.due_date)}</small></div>
                 <div className="d-flex flex-wrap align-content-start gap-2">

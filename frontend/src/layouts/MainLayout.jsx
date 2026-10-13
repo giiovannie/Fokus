@@ -13,9 +13,18 @@ const MainLayout = () => {
   const location = useLocation()
 
   useEffect(() => {
+    if (location.hash) {
+      if (isLoading) return
+      const frame = window.requestAnimationFrame(() => {
+        const target = document.getElementById(location.hash.slice(1))
+        target?.scrollIntoView?.({ block: 'center', behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
+        target?.focus({ preventScroll: true })
+      })
+      return () => window.cancelAnimationFrame(frame)
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' })
     window.requestAnimationFrame(() => document.querySelector('#main-content')?.focus())
-  }, [location.pathname])
+  }, [location.pathname, location.hash, isLoading])
 
   useEffect(() => {
     if (!menuOpen) return undefined

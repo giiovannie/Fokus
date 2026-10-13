@@ -1,0 +1,14 @@
+.roulette-stage { position: relative; width: 100%; max-width: 28rem; aspect-ratio: 1; margin: 1.5rem auto 1rem; }
+.roulette-disc { width: 100%; height: 100%; border-radius: 50%; transition-property: transform; transition-timing-function: cubic-bezier(.18, .02, .12, 1); box-shadow: 0 0 0 3px var(--border-subtle), 0 8px 24px rgb(0 0 0 / 12%); }
+.roulette-disc svg { display: block; width: 100%; height: 100%; }
+.roulette-pointer { position: absolute; z-index: 1; top: -.2rem; left: 50%; transform: translateX(-50%); width: 1.5rem; height: 1.9rem; background: var(--text-main); clip-path: polygon(0 0, 100% 0, 50% 100%); }
+.roulette-comment { min-height: 3rem; color: var(--text-secondary); }
+.roulette-options { max-height: 34rem; overflow-y: auto; }
+.roulette-option { border-bottom: 1px solid var(--border-subtle); cursor: pointer; overflow-wrap: anywhere; }
+.roulette-option:hover { background: var(--bg-highlight); }
+.roulette-option .flex-grow-1 { min-width: 0; }
+.roulette-number { flex: 0 0 auto; display: inline-grid; place-items: center; width: 1.65rem; height: 1.65rem; border-radius: 50%; background: var(--bg-highlight); color: var(--text-main); font-size: .8rem; font-weight: 700; }
+.roulette-result { background: var(--bg-highlight); border: 1px solid var(--border-subtle); border-radius: 1rem; animation: roulette-reveal 240ms ease-out both; overflow-wrap: anywhere; }
+@keyframes roulette-reveal { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .roulette-disc { transition: none; } .roulette-result { animation: none; } }
+@media (max-width: 575px) { .roulette-options { max-height: 24rem; } .roulette-stage { max-width: 22rem; } }

@@ -8,6 +8,7 @@ const links = [
   ['/tasks', 'Tareas', '✓'],
   ['/exams', 'Exámenes', '◫'],
   ['/study', 'Estudio', '◎'],
+  ['/roulette', 'Ruleta', '◉'],
   ['/notifications', 'Notificaciones', '●'],
   ['/profile', 'Perfil', '○'],
 ]
